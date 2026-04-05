@@ -1,4 +1,4 @@
-import { RSI, MACD, StochasticRSI } from 'technicalindicators';
+import { RSI, MACD, StochasticRSI, BollingerBands } from 'technicalindicators';
 import YahooFinance from 'yahoo-finance2';
 
 const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
@@ -20,6 +20,10 @@ export interface StockIndicatorResult {
   beta?: number | null;
   marketCap?: number | null;
   bookValue?: number | null;
+  // Bollinger Bands (20, 2)
+  bbUpper?: number | null;
+  bbMiddle?: number | null;
+  bbLower?: number | null;
   error?: string;
 }
 
@@ -96,6 +100,9 @@ export async function fetchStockData(ticker: string): Promise<StockIndicatorResu
 
     const lastStoch = stochRsiValues.length > 0 ? stochRsiValues[stochRsiValues.length - 1] : null;
 
+    const bbValues = BollingerBands.calculate({ values: closePrices, period: 20, stdDev: 2 });
+    const lastBb = bbValues.length > 0 ? bbValues[bbValues.length - 1] : null;
+
     return {
       ticker,
       price: lastData.close,
@@ -107,6 +114,9 @@ export async function fetchStockData(ticker: string): Promise<StockIndicatorResu
       macd: macdValues.length > 0 ? macdValues[macdValues.length - 1].MACD || null : null,
       macdSignal: macdValues.length > 0 ? macdValues[macdValues.length - 1].signal || null : null,
       macdHistogram: macdValues.length > 0 ? macdValues[macdValues.length - 1].histogram || null : null,
+      bbUpper: lastBb?.upper ?? null,
+      bbMiddle: lastBb?.middle ?? null,
+      bbLower: lastBb?.lower ?? null,
       pe,
       eps,
       beta,
@@ -125,6 +135,9 @@ export async function fetchStockData(ticker: string): Promise<StockIndicatorResu
       macd: null,
       macdSignal: null,
       macdHistogram: null,
+      bbUpper: null,
+      bbMiddle: null,
+      bbLower: null,
       pe: null,
       eps: null,
       beta: null,
@@ -153,6 +166,9 @@ export interface StockChartData {
   macd: number | null;
   macdSignal: number | null;
   macdHistogram: number | null;
+  bbUpper: number | null;
+  bbMiddle: number | null;
+  bbLower: number | null;
 }
 
 export async function fetchStockChartData(ticker: string): Promise<StockChartData[]> {
@@ -218,14 +234,18 @@ export async function fetchStockChartData(ticker: string): Promise<StockChartDat
       dPeriod: 3,
     });
 
+    const bbValuesChart = BollingerBands.calculate({ values: closePrices, period: 20, stdDev: 2 });
+
     const rsiOffset = validData.length - rsiValues.length;
     const macdOffset = validData.length - macdValues.length;
     const stochOffset = validData.length - stochRsiValues.length;
+    const bbOffset = validData.length - bbValuesChart.length;
 
     return validData.map((d, index) => {
       const rsi = index >= rsiOffset ? rsiValues[index - rsiOffset] : null;
       const macd = index >= macdOffset ? macdValues[index - macdOffset] : null;
       const stoch = index >= stochOffset ? stochRsiValues[index - stochOffset] : null;
+      const bb = index >= bbOffset ? bbValuesChart[index - bbOffset] : null;
 
       return {
         time: d.time,
@@ -240,6 +260,9 @@ export async function fetchStockChartData(ticker: string): Promise<StockChartDat
         macd: macd?.MACD ?? null,
         macdSignal: macd?.signal ?? null,
         macdHistogram: macd?.histogram ?? null,
+        bbUpper: bb?.upper ?? null,
+        bbMiddle: bb?.middle ?? null,
+        bbLower: bb?.lower ?? null,
       };
     });
   } catch (error: unknown) {

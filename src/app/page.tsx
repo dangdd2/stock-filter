@@ -27,6 +27,9 @@ export interface StockIndicatorResult {
   beta?: number | null;
   marketCap?: number | null;
   bookValue?: number | null;
+  bbUpper?: number | null;
+  bbMiddle?: number | null;
+  bbLower?: number | null;
   error?: string;
 }
 
@@ -52,6 +55,9 @@ interface ChartDataPoint {
   ma20?: number;
   volume?: number;
   volumeMa?: number;
+  bbUpper?: number | null;
+  bbMiddle?: number | null;
+  bbLower?: number | null;
 }
 
 interface CandleBodyProps {
@@ -140,6 +146,9 @@ function ChartView({ ticker }: { ticker: string }) {
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showMA10, setShowMA10] = useState(true);
+  const [showMA20, setShowMA20] = useState(true);
+  const [showBB, setShowBB] = useState(true);
 
   useEffect(() => {
     async function fetchChart() {
@@ -170,6 +179,9 @@ function ChartView({ ticker }: { ticker: string }) {
               const sum = arr.slice(i - period + 1, i + 1).reduce((s, x) => s + (x.volume ?? 0), 0);
               return sum / period;
             })(),
+            bbUpper: d.bbUpper,
+            bbMiddle: d.bbMiddle,
+            bbLower: d.bbLower,
           };
         });
         setChartData(formatted);
@@ -192,9 +204,33 @@ function ChartView({ ticker }: { ticker: string }) {
 
   return (
     <div className="p-6 bg-slate-900 border-t border-slate-700">
-      <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-        <BarChart2 className="text-blue-400" /> {ticker} - 6 Months Price History
-      </h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-bold flex items-center gap-2">
+          <BarChart2 className="text-blue-400" /> {ticker} - 6 Months Price History
+        </h3>
+        <div className="flex items-center gap-2">
+          {([
+            { label: 'MA10', color: '#f59e0b', active: showMA10, toggle: () => setShowMA10(v => !v) },
+            { label: 'MA20', color: '#60a5fa', active: showMA20, toggle: () => setShowMA20(v => !v) },
+            { label: 'BB',   color: '#f43f5e', active: showBB,   toggle: () => setShowBB(v => !v) },
+          ] as const).map(({ label, color, active, toggle }) => (
+            <button
+              key={label}
+              onClick={toggle}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
+                active ? 'border-transparent' : 'border-slate-600 opacity-40'
+              }`}
+              style={active ? { backgroundColor: color + '22', color, borderColor: color + '55' } : {}}
+            >
+              <span
+                className="inline-block w-3 h-0.5 rounded"
+                style={{ backgroundColor: active ? color : '#475569' }}
+              />
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="h-[400px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={chartData} margin={{ top: 10, right: 60, left: 0, bottom: 0 }}>
@@ -247,8 +283,11 @@ function ChartView({ ticker }: { ticker: string }) {
               shape={<CandleBody />}
               isAnimationActive={false}
             />
-            <Line yAxisId="price" type="monotone" dataKey="ma10" stroke="#f59e0b" strokeWidth={1.5} dot={false} name="MA10" connectNulls />
-            <Line yAxisId="price" type="monotone" dataKey="ma20" stroke="#60a5fa" strokeWidth={1.5} dot={false} name="MA20" connectNulls />
+            {showMA10 && <Line yAxisId="price" type="monotone" dataKey="ma10" stroke="#f59e0b" strokeWidth={1.5} dot={false} name="MA10" connectNulls />}
+            {showMA20 && <Line yAxisId="price" type="monotone" dataKey="ma20" stroke="#60a5fa" strokeWidth={1.5} dot={false} name="MA20" connectNulls />}
+            {showBB && <Line yAxisId="price" type="monotone" dataKey="bbUpper" stroke="#f43f5e" strokeWidth={1} strokeDasharray="4 3" dot={false} name="BB Upper" connectNulls />}
+            {showBB && <Line yAxisId="price" type="monotone" dataKey="bbMiddle" stroke="#94a3b8" strokeWidth={1} strokeDasharray="4 3" dot={false} name="BB Mid" connectNulls />}
+            {showBB && <Line yAxisId="price" type="monotone" dataKey="bbLower" stroke="#10b981" strokeWidth={1} strokeDasharray="4 3" dot={false} name="BB Lower" connectNulls />}
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -571,12 +610,16 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           price: item.price,
+          volume: item.volume,
           rsi: item.rsi,
           stochK: item.stochK,
           stochD: item.stochD,
           macd: item.macd,
           macdSignal: item.macdSignal,
           macdHistogram: item.macdHistogram,
+          bbUpper: item.bbUpper ?? null,
+          bbMiddle: item.bbMiddle ?? null,
+          bbLower: item.bbLower ?? null,
         }),
       });
 
@@ -626,221 +669,157 @@ export default function Home() {
             <p className="text-xs text-slate-400">Custom Watchlists & Technical Indicators</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={fetchData} 
-            disabled={loading || !activeWatchlist || activeWatchlist.tickers.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-sm transition-colors disabled:opacity-50"
-          >
-            <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
-            Refresh
-          </button>
-        </div>
+        <div />
       </header>
 
-      <main className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Sidebar Filters */}
-        <aside className="lg:col-span-1 space-y-6">
-          {/* Watchlist Management */}
-          <div className="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-lg">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-lg flex items-center gap-2">
-                <BarChart2 size={18} className="text-blue-400" /> Watchlist
-              </h2>
-              <button 
-                onClick={createWatchlist}
-                className="p-1 hover:bg-slate-700 rounded-md text-slate-400 hover:text-blue-400 transition-colors"
-                title="Create new watchlist"
+      <main className="w-full px-4 py-4 space-y-3">
+        {/* ── Top Control Bar ── */}
+        <div className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 flex flex-wrap items-center gap-3">
+
+          {/* Watchlist selector */}
+          <div className="flex items-center gap-2">
+            <BarChart2 size={15} className="text-blue-400 shrink-0" />
+            <div className="relative">
+              <select
+                value={activeWatchlistId}
+                onChange={(e) => setActiveWatchlistId(e.target.value)}
+                className="bg-slate-900 border border-slate-700 rounded-md pl-3 pr-8 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none"
               >
-                <Plus size={20} />
+                {watchlists.map(w => (
+                  <option key={w.id} value={w.id}>
+                    {w.id === MASTER_ID ? `★ ${w.name}` : w.name}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute inset-y-0 right-2 flex items-center pointer-events-none text-slate-500">
+                <MoreVertical size={13} />
+              </div>
+            </div>
+          </div>
+
+          {/* Watchlist actions */}
+          {activeWatchlist && (
+            activeWatchlistId === MASTER_ID ? (
+              <button
+                onClick={syncMasterWatchlist}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-md text-xs transition-colors"
+              >
+                <RefreshCw size={12} /> Sync
               </button>
-            </div>
-
-            <div className="space-y-4">
-              <div className="relative">
-                <select
-                  value={activeWatchlistId}
-                  onChange={(e) => setActiveWatchlistId(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none"
-                >
-                  {watchlists.map(w => (
-                    <option key={w.id} value={w.id}>
-                      {w.id === MASTER_ID ? `★ ${w.name}` : w.name}
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-slate-500">
-                  <MoreVertical size={14} />
-                </div>
-              </div>
-
-              {activeWatchlist && (
-                activeWatchlistId === MASTER_ID ? (
-                  <div className="space-y-2">
-                    <p className="text-[11px] text-slate-500">Aggregates all tickers from every other watchlist.</p>
-                    <button
-                      onClick={syncMasterWatchlist}
-                      className="w-full flex items-center justify-center gap-2 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-md text-xs transition-colors"
-                    >
-                      <RefreshCw size={12} /> Sync from all watchlists
-                    </button>
-                  </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                {isEditingName ? (
+                  <>
+                    <input
+                      type="text"
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      onBlur={renameWatchlist}
+                      onKeyDown={(e) => e.key === 'Enter' && renameWatchlist()}
+                      autoFocus
+                      className="bg-slate-900 border border-blue-500 rounded-md px-2 py-1 text-sm outline-none w-36"
+                    />
+                    <button onClick={renameWatchlist} className="text-emerald-400"><Save size={16}/></button>
+                  </>
                 ) : (
-                  <div className="flex gap-2">
-                    {isEditingName ? (
-                      <div className="flex w-full gap-2">
-                        <input
-                          type="text"
-                          value={newName}
-                          onChange={(e) => setNewName(e.target.value)}
-                          onBlur={renameWatchlist}
-                          onKeyDown={(e) => e.key === 'Enter' && renameWatchlist()}
-                          autoFocus
-                          className="flex-1 bg-slate-900 border border-blue-500 rounded-md px-2 py-1 text-sm outline-none"
-                        />
-                        <button onClick={renameWatchlist} className="text-emerald-400"><Save size={18}/></button>
-                      </div>
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => { setIsEditingName(true); setNewName(activeWatchlist.name); }}
-                          className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md text-xs transition-colors"
-                        >
-                          <Edit2 size={12} /> Rename
-                        </button>
-                        <button
-                          onClick={deleteWatchlist}
-                          disabled={watchlists.filter(w => w.id !== MASTER_ID).length <= 1}
-                          className="flex items-center justify-center gap-1 px-3 py-1.5 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 rounded-md text-xs transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                        >
-                          <Trash2 size={12} /> Delete
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )
-              )}
+                  <>
+                    <button
+                      onClick={() => { setIsEditingName(true); setNewName(activeWatchlist.name); }}
+                      className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md text-xs transition-colors"
+                    >
+                      <Edit2 size={12} /> Rename
+                    </button>
+                    <button
+                      onClick={deleteWatchlist}
+                      disabled={watchlists.filter(w => w.id !== MASTER_ID).length <= 1}
+                      className="flex items-center gap-1 px-2.5 py-1.5 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 rounded-md text-xs transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <Trash2 size={12} /> Delete
+                    </button>
+                    <button
+                      onClick={createWatchlist}
+                      className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 rounded-md text-xs transition-colors"
+                    >
+                      <Plus size={12} /> New
+                    </button>
+                  </>
+                )}
+              </div>
+            )
+          )}
 
-              <form onSubmit={addTicker} className="flex gap-2 pt-2 border-t border-slate-700/50">
-                <input 
-                  type="text"
-                  placeholder="Add ticker (e.g. VCB)"
-                  value={newTicker}
-                  onChange={(e) => setNewTicker(e.target.value)}
-                  className="flex-1 bg-slate-900 border border-slate-700 rounded-md px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-                <button 
-                  type="submit"
-                  className="p-1.5 bg-blue-500 hover:bg-blue-600 rounded-md text-white transition-colors"
-                >
-                  <Plus size={16} />
-                </button>
-              </form>
-            </div>
+          {/* Add ticker */}
+          <form onSubmit={addTicker} className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Add ticker (e.g. VCB)"
+              value={newTicker}
+              onChange={(e) => setNewTicker(e.target.value)}
+              className="bg-slate-900 border border-slate-700 rounded-md px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 w-44"
+            />
+            <button type="submit" className="p-1.5 bg-blue-500 hover:bg-blue-600 rounded-md text-white transition-colors">
+              <Plus size={15} />
+            </button>
+          </form>
+
+          <div className="w-px h-6 bg-slate-700 mx-1 hidden sm:block" />
+
+          {/* Filters */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Filter size={14} className="text-slate-400 shrink-0" />
+
+            <select
+              value={rsiFilter}
+              onChange={(e) => setRsiFilter(e.target.value as RsiFilter)}
+              className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="ALL">RSI: All</option>
+              <option value="OVERSOLD">RSI &lt; 30</option>
+              <option value="NEUTRAL">RSI 30–70</option>
+              <option value="OVERBOUGHT">RSI &gt; 70</option>
+            </select>
+
+            <select
+              value={macdFilter}
+              onChange={(e) => setMacdFilter(e.target.value as MacdFilter)}
+              className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="ALL">MACD: All</option>
+              <option value="BULLISH">Bullish</option>
+              <option value="BEARISH">Bearish</option>
+            </select>
+
+            <select
+              value={stochFilter}
+              onChange={(e) => setStochFilter(e.target.value as StochFilter)}
+              className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="ALL">Stoch: All</option>
+              <option value="OVERSOLD">Oversold &lt; 20</option>
+              <option value="OVERBOUGHT">Overbought &gt; 80</option>
+              <option value="BULLISH_CROSS">Bullish Cross</option>
+              <option value="BEARISH_CROSS">Bearish Cross</option>
+            </select>
           </div>
 
-          <div className="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-lg">
-            <div className="flex items-center gap-2 mb-4 text-slate-200">
-              <Filter size={18} />
-              <h2 className="font-semibold text-lg">Filters</h2>
-            </div>
-            
-            <div className="space-y-5">
-              {/* RSI Filter */}
-              <div>
-                <label className="block text-sm font-medium text-slate-400 mb-2">RSI (Relative Strength Index)</label>
-                <div className="space-y-2">
-                  {(['ALL', 'OVERSOLD', 'NEUTRAL', 'OVERBOUGHT'] as RsiFilter[]).map(f => (
-                    <button
-                      key={f}
-                      onClick={() => setRsiFilter(f)}
-                      className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex justify-between items-center ${
-                        rsiFilter === f 
-                          ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' 
-                          : 'hover:bg-slate-700 text-slate-300 border border-transparent'
-                      }`}
-                    >
-                      <span>
-                        {f === 'ALL' && 'All Conditions'}
-                        {f === 'OVERSOLD' && 'Oversold (< 30)'}
-                        {f === 'NEUTRAL' && 'Neutral (30 - 70)'}
-                        {f === 'OVERBOUGHT' && 'Overbought (> 70)'}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* MACD Filter */}
-              <div>
-                <label className="block text-sm font-medium text-slate-400 mb-2">MACD Trend</label>
-                <div className="space-y-2">
-                  {(['ALL', 'BULLISH', 'BEARISH'] as MacdFilter[]).map(f => (
-                    <button
-                      key={f}
-                      onClick={() => setMacdFilter(f)}
-                      className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex justify-between items-center ${
-                        macdFilter === f 
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
-                          : 'hover:bg-slate-700 text-slate-300 border border-transparent'
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        {f === 'BULLISH' && <TrendingUp size={16} className="text-emerald-400"/>}
-                        {f === 'BEARISH' && <TrendingDown size={16} className="text-rose-400"/>}
-                        {f === 'ALL' && 'All Trends'}
-                        {f !== 'ALL' && (f === 'BULLISH' ? 'Bullish (MACD > Signal)' : 'Bearish (MACD < Signal)')}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Stoch RSI Filter */}
-              <div>
-                <label className="block text-sm font-medium text-slate-400 mb-2">Stochastic RSI</label>
-                <div className="space-y-2">
-                  {(['ALL', 'OVERSOLD', 'OVERBOUGHT', 'BULLISH_CROSS', 'BEARISH_CROSS'] as StochFilter[]).map(f => (
-                    <button
-                      key={f}
-                      onClick={() => setStochFilter(f)}
-                      className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex justify-between items-center ${
-                        stochFilter === f 
-                          ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' 
-                          : 'hover:bg-slate-700 text-slate-300 border border-transparent'
-                      }`}
-                    >
-                      <span>
-                        {f === 'ALL' && 'All Conditions'}
-                        {f === 'OVERSOLD' && 'Oversold (< 20)'}
-                        {f === 'OVERBOUGHT' && 'Overbought (> 80)'}
-                        {f === 'BULLISH_CROSS' && 'Bullish Cross (K > D)'}
-                        {f === 'BEARISH_CROSS' && 'Bearish Cross (K < D)'}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
+          {/* Summary + Refresh pushed to the right */}
+          <div className="ml-auto flex items-center gap-3">
+            <span className="text-xs text-slate-400">
+              <span className="font-bold text-slate-200">{filteredData.length}</span> / {activeWatchlist?.tickers.length || 0} tickers
+            </span>
+            <button
+              onClick={fetchData}
+              disabled={loading || !activeWatchlist || activeWatchlist.tickers.length === 0}
+              className="flex items-center gap-2 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md text-sm transition-colors disabled:opacity-50"
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+              Refresh
+            </button>
           </div>
-          
-          <div className="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-lg">
-            <h3 className="text-sm font-medium text-slate-400 mb-2">Summary</h3>
-            <div className="grid grid-cols-2 gap-4 text-center">
-              <div className="bg-slate-900 p-3 rounded-lg border border-slate-700">
-                <p className="text-2xl font-bold text-slate-200">{filteredData.length}</p>
-                <p className="text-xs text-slate-500">Matching</p>
-              </div>
-              <div className="bg-slate-900 p-3 rounded-lg border border-slate-700">
-                <p className="text-2xl font-bold text-slate-200">{activeWatchlist?.tickers.length || 0}</p>
-                <p className="text-xs text-slate-500">In Watchlist</p>
-              </div>
-            </div>
-          </div>
-        </aside>
+        </div>
 
         {/* Main Content */}
-        <section className="lg:col-span-3">
+        <section>
           {error && (
             <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-xl flex items-start gap-3 mb-6">
               <AlertCircle className="shrink-0 mt-0.5" />
@@ -863,6 +842,7 @@ export default function Home() {
                     <th className="px-4 py-4 font-medium">Beta</th>
                     <th className="px-4 py-4 font-medium">Mkt Cap</th>
                     <th className="px-4 py-4 font-medium">BV/Share</th>
+                    <th className="px-4 py-4 font-medium">BB %B</th>
                     <th className="px-4 py-4 font-medium">RSI</th>
                     <th className="px-4 py-4 font-medium">Stoch RSI</th>
                     <th className="px-4 py-4 font-medium">MACD Hist</th>
@@ -939,6 +919,21 @@ export default function Home() {
                             </td>
                             <td className="px-4 py-4 font-mono text-slate-400 text-xs">
                               {item.bookValue ? item.bookValue.toLocaleString() : '-'}
+                            </td>
+                            <td className="px-4 py-4 text-xs font-mono">
+                              {(() => {
+                                const { bbUpper, bbLower, price } = item;
+                                if (!bbUpper || !bbLower || bbUpper === bbLower) return <span className="text-slate-500">-</span>;
+                                const pct = (price - bbLower) / (bbUpper - bbLower);
+                                const color = pct > 1 ? 'text-rose-400' : pct < 0 ? 'text-emerald-400' : 'text-slate-300';
+                                const label = pct > 1 ? '↑ Above' : pct < 0 ? '↓ Below' : 'Inside';
+                                return (
+                                  <div className={`flex flex-col ${color}`}>
+                                    <span>{(pct * 100).toFixed(0)}%</span>
+                                    <span className="text-[10px] opacity-70">{label}</span>
+                                  </div>
+                                );
+                              })()}
                             </td>
                             <td className={`px-4 py-4 font-mono font-medium text-sm ${rsiColor}`}>
                               {item.rsi !== null ? item.rsi.toFixed(2) : '-'}

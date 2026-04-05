@@ -10,7 +10,9 @@
       "Bash(grep -r Customized C:WorkLabteststockvn-stock-filternode_modulesrechartssrc --include=*.tsx -l)",
       "Bash(grep -r Customized C:WorkLabteststockvn-stock-filternode_modulesrechartses --include=*.js -l)",
       "Bash(node -e \":*)",
-      "Bash(grep -r \"useXAxisScale\\\\|useYAxisScale\" C:WorkLabteststockvn-stock-filternode_modulesrechartstypes --include=*.d.ts -l)"
+      "Bash(grep -r \"useXAxisScale\\\\|useYAxisScale\" C:WorkLabteststockvn-stock-filternode_modulesrechartstypes --include=*.d.ts -l)",
+      "Skill(claude-api)",
+      "Bash(ls C:WorkLabteststockvn-stock-filter.env*)"
     ]
   }
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, Fragment, useCallback } from 'react';
 import { format } from 'date-fns';
-import { Activity, TrendingUp, TrendingDown, Filter, AlertCircle, RefreshCw, BarChart2, X, Plus, Trash2, Edit2, Save, MoreVertical } from 'lucide-react';
+import { Activity, TrendingUp, TrendingDown, Filter, AlertCircle, RefreshCw, BarChart2, X, Plus, Trash2, Edit2, Save, MoreVertical, Brain } from 'lucide-react';
 
 export interface Watchlist {
   id: string;
@@ -312,6 +312,63 @@ function ChartView({ ticker }: { ticker: string }) {
   );
 }
 
+const REC_CONFIG: Record<string, { label: string; className: string }> = {
+  BUY:        { label: 'BUY',        className: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
+  SELL:       { label: 'SELL',       className: 'bg-rose-500/20 text-rose-300 border-rose-500/30' },
+  HOLD:       { label: 'HOLD',       className: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
+  OBSERVABLE: { label: 'OBSERVABLE', className: 'bg-slate-500/20 text-slate-300 border-slate-500/30' },
+};
+
+function AiPanel({
+  ticker, content, loading, error, onClose,
+}: {
+  ticker: string;
+  content: string;
+  loading: boolean;
+  error: string | null;
+  onClose: () => void;
+}) {
+  const recMatch = content.match(/RECOMMENDATION:\s*(BUY|SELL|HOLD|OBSERVABLE)/);
+  const rec = recMatch ? REC_CONFIG[recMatch[1]] : null;
+  // Strip the first RECOMMENDATION line from display to avoid duplication
+  const bodyText = content.replace(/^RECOMMENDATION:\s*(BUY|SELL|HOLD|OBSERVABLE)\n?/, '');
+
+  return (
+    <div className="bg-slate-900 border-t border-violet-500/20 p-6">
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <Brain size={20} className="text-violet-400" />
+          <h3 className="font-bold text-slate-200">AI Analysis — {ticker}</h3>
+          {rec && (
+            <span className={`px-3 py-1 rounded-full text-xs font-bold border ${rec.className}`}>
+              {rec.label}
+            </span>
+          )}
+          {loading && !rec && (
+            <span className="text-xs text-slate-500 animate-pulse">Analyzing…</span>
+          )}
+        </div>
+        <button onClick={onClose} className="p-1 text-slate-500 hover:text-slate-300 transition-colors">
+          <X size={18} />
+        </button>
+      </div>
+      {error && (
+        <div className="text-rose-400 text-sm bg-rose-500/10 border border-rose-500/20 rounded-lg p-3">
+          {error}
+        </div>
+      )}
+      {!error && (
+        <div className="prose prose-invert prose-sm max-w-none">
+          <pre className="whitespace-pre-wrap font-sans text-sm text-slate-300 leading-relaxed">
+            {bodyText || (loading ? '' : 'No content.')}
+            {loading && <span className="inline-block w-2 h-4 bg-violet-400 animate-pulse ml-0.5 align-middle" />}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const MASTER_ID = 'master';
 
 export default function Home() {
@@ -323,6 +380,12 @@ export default function Home() {
   const [macdFilter, setMacdFilter] = useState<MacdFilter>('ALL');
   const [stochFilter, setStochFilter] = useState<StochFilter>('ALL');
   const [expandedTicker, setExpandedTicker] = useState<string | null>(null);
+
+  // AI analysis state
+  const [aiTicker, setAiTicker] = useState<string | null>(null);
+  const [aiContent, setAiContent] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   // Watchlist state
   const [watchlists, setWatchlists] = useState<Watchlist[]>([]);
@@ -492,6 +555,65 @@ export default function Home() {
     }
   };
 
+  const runAnalysis = useCallback(async (item: StockIndicatorResult) => {
+    if (aiTicker === item.ticker) {
+      setAiTicker(null);
+      return;
+    }
+    setAiTicker(item.ticker);
+    setAiContent('');
+    setAiError(null);
+    setAiLoading(true);
+
+    try {
+      const res = await fetch(`/api/analyze/${item.ticker}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          price: item.price,
+          rsi: item.rsi,
+          stochK: item.stochK,
+          stochD: item.stochD,
+          macd: item.macd,
+          macdSignal: item.macdSignal,
+          macdHistogram: item.macdHistogram,
+        }),
+      });
+
+      if (!res.ok) throw new Error('Analysis request failed');
+      if (!res.body) throw new Error('No response body');
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6);
+          if (payload === '[DONE]') break;
+          let parsed: { text?: string; error?: string } | null = null;
+          try {
+            parsed = JSON.parse(payload);
+          } catch { /* skip malformed JSON */ }
+          if (parsed) {
+            if (parsed.error) throw new Error(parsed.error);
+            if (parsed.text) setAiContent(prev => prev + parsed.text);
+          }
+        }
+      }
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setAiLoading(false);
+    }
+  }, [aiTicker]);
+
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 font-sans pb-10">
       <header className="bg-slate-800 border-b border-slate-700 py-4 px-6 sticky top-0 z-10 flex justify-between items-center shadow-md">
@@ -500,7 +622,7 @@ export default function Home() {
             <Activity size={24} />
           </div>
           <div>
-            <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">VN Stock Filter</h1>
+            <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">Stock AI</h1>
             <p className="text-xs text-slate-400">Custom Watchlists & Technical Indicators</p>
           </div>
         </div>
@@ -843,13 +965,28 @@ export default function Home() {
                                 <button
                                   onClick={() => toggleChart(item.ticker)}
                                   className={`p-1.5 rounded-md transition-colors border ${
-                                    isExpanded 
-                                      ? 'bg-slate-700 text-slate-200 border-slate-600' 
+                                    isExpanded
+                                      ? 'bg-slate-700 text-slate-200 border-slate-600'
                                       : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
                                   }`}
                                   title={isExpanded ? 'Close Chart' : 'View Chart'}
                                 >
                                   {isExpanded ? <X size={16} /> : <BarChart2 size={16} />}
+                                </button>
+                                <button
+                                  onClick={() => runAnalysis(item)}
+                                  disabled={aiLoading && aiTicker !== item.ticker}
+                                  className={`p-1.5 rounded-md transition-colors border ${
+                                    aiTicker === item.ticker
+                                      ? 'bg-violet-500/20 text-violet-300 border-violet-500/30'
+                                      : 'bg-violet-500/10 text-violet-400 border-violet-500/20 hover:bg-violet-500/20'
+                                  } disabled:opacity-40 disabled:cursor-not-allowed`}
+                                  title="AI Analysis"
+                                >
+                                  {aiLoading && aiTicker === item.ticker
+                                    ? <RefreshCw size={16} className="animate-spin" />
+                                    : <Brain size={16} />
+                                  }
                                 </button>
                                 <button
                                   onClick={() => removeTicker(item.ticker)}
@@ -865,6 +1002,19 @@ export default function Home() {
                             <tr>
                               <td colSpan={11} className="p-0">
                                 <ChartView ticker={item.ticker} />
+                              </td>
+                            </tr>
+                          )}
+                          {aiTicker === item.ticker && (
+                            <tr>
+                              <td colSpan={11} className="p-0">
+                                <AiPanel
+                                  ticker={item.ticker}
+                                  content={aiContent}
+                                  loading={aiLoading}
+                                  error={aiError}
+                                  onClose={() => setAiTicker(null)}
+                                />
                               </td>
                             </tr>
                           )}

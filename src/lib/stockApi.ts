@@ -146,6 +146,7 @@ export interface StockChartData {
   high: number;
   low: number;
   close: number;
+  volume: number;
   rsi: number | null;
   stochK: number | null;
   stochD: number | null;
@@ -176,10 +177,11 @@ export async function fetchStockChartData(ticker: string): Promise<StockChartDat
     const opens: number[] = quote.open || [];
     const highs: number[] = quote.high || [];
     const lows: number[] = quote.low || [];
+    const volumes: number[] = quote.volume || [];
 
     const validData = [];
     for (let i = 0; i < closes.length; i++) {
-      if (closes[i] !== null && closes[i] !== undefined && 
+      if (closes[i] !== null && closes[i] !== undefined &&
           opens[i] !== null && opens[i] !== undefined &&
           highs[i] !== null && highs[i] !== undefined &&
           lows[i] !== null && lows[i] !== undefined) {
@@ -188,6 +190,7 @@ export async function fetchStockChartData(ticker: string): Promise<StockChartDat
           open: opens[i],
           high: highs[i],
           low: lows[i],
+          volume: volumes[i] ?? 0,
           time: timestamps[i]
         });
       }
@@ -230,6 +233,7 @@ export async function fetchStockChartData(ticker: string): Promise<StockChartDat
         high: d.high,
         low: d.low,
         close: d.close,
+        volume: d.volume,
         rsi: rsi,
         stochK: stoch ? (stoch as { k: number }).k : null,
         stochD: stoch ? (stoch as { d: number }).d : null,

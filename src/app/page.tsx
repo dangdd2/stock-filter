@@ -9,7 +9,7 @@ export interface Watchlist {
   name: string;
   tickers: string[];
 }
-import { Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Bar, ReferenceLine, Cell } from 'recharts';
+import { Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Bar, ReferenceLine, Cell, useXAxisScale, useYAxisScale } from 'recharts';
 
 export interface StockIndicatorResult {
   ticker: string;
@@ -42,64 +42,96 @@ interface ChartDataPoint {
   close: number;
   dateStr: string;
   ohlc: [number, number];
+  rsi?: number;
   macd?: number;
   macdSignal?: number;
   macdHistogram?: number;
   stochK?: number;
   stochD?: number;
+  ma10?: number;
+  ma20?: number;
+  volume?: number;
+  volumeMa?: number;
 }
 
-interface CandlestickProps {
+interface CandleBodyProps {
   x?: number;
   y?: number;
   width?: number;
   height?: number;
   payload?: ChartDataPoint;
-  yAxis?: {
-    scale: (val: number) => number;
-  };
 }
 
-const Candlestick = (props: CandlestickProps) => {
-  const { x, y, width, height, payload, yAxis } = props;
+// Draws only the candle body (open-to-close rectangle)
+const CandleBody = ({ x, y, width, height, payload }: CandleBodyProps) => {
+  if (x === undefined || y === undefined || width === undefined || height === undefined || !payload) return null;
+  const color = payload.close >= payload.open ? '#10b981' : '#f43f5e';
+  const gap = Math.max(Math.floor(width * 0.15), 1);
+  return (
+    <rect
+      x={x + gap}
+      y={y}
+      width={Math.max(width - gap * 2, 1)}
+      height={Math.max(height, 1.5)}
+      fill={color}
+    />
+  );
+};
 
-  if (x === undefined || y === undefined || width === undefined || height === undefined || !payload) {
-    return null;
-  }
+// Draws volume bars using Recharts 3 axis scale hooks
+const VolumeLayer = ({ data }: { data: ChartDataPoint[] }) => {
+  const xScale = useXAxisScale() as ((v: string) => number) & { bandwidth?: () => number } | undefined;
+  const yScale = useYAxisScale('volume') as ((v: number) => number) | undefined;
 
-  const { open, close, high, low } = payload;
-  const isUp = close >= open;
-  const color = isUp ? '#10b981' : '#f43f5e';
-  const wickX = x + width / 2;
-
-  // For wicks, we use the scale function if available
-  let highY = y;
-  let lowY = y + height;
-  
-  if (yAxis && typeof yAxis.scale === 'function') {
-    highY = yAxis.scale(high);
-    lowY = yAxis.scale(low);
-  }
+  if (!xScale || !yScale) return null;
+  const bw = xScale.bandwidth ? xScale.bandwidth() : 8;
+  const baseY = yScale(0);
 
   return (
     <g>
-      {/* Wick */}
-      <line
-        x1={wickX}
-        y1={highY}
-        x2={wickX}
-        y2={lowY}
-        stroke={color}
-        strokeWidth={1}
-      />
-      {/* Body */}
-      <rect
-        x={x}
-        y={y}
-        width={width}
-        height={Math.max(height, 2)} // Ensure at least 2px height for Doji
-        fill={color}
-      />
+      {data.map((d, i) => {
+        if (!d.volume) return null;
+        const barY = yScale(d.volume);
+        const color = (d.close ?? 0) >= (d.open ?? 0) ? '#10b981' : '#f43f5e';
+        return (
+          <rect
+            key={i}
+            x={xScale(d.dateStr) + 1}
+            y={barY}
+            width={Math.max(bw - 2, 1)}
+            height={Math.max(baseY - barY, 1)}
+            fill={color}
+            fillOpacity={0.4}
+          />
+        );
+      })}
+    </g>
+  );
+};
+
+// Draws all wicks using Recharts 3 axis scale hooks
+const WickLayer = ({ data, yAxisId }: { data: ChartDataPoint[]; yAxisId?: string }) => {
+  const xScale = useXAxisScale() as ((v: string) => number) & { bandwidth?: () => number } | undefined;
+  const yScale = useYAxisScale(yAxisId) as ((v: number) => number) | undefined;
+
+  if (!xScale || !yScale) return null;
+  const bw = xScale.bandwidth ? xScale.bandwidth() : 8;
+
+  return (
+    <g>
+      {data.map((d, i) => {
+        const cx = xScale(d.dateStr) + bw / 2;
+        const color = d.close >= d.open ? '#10b981' : '#f43f5e';
+        return (
+          <line
+            key={i}
+            x1={cx} y1={yScale(d.high)}
+            x2={cx} y2={yScale(d.low)}
+            stroke={color}
+            strokeWidth={1}
+          />
+        );
+      })}
     </g>
   );
 };
@@ -119,12 +151,27 @@ function ChartView({ ticker }: { ticker: string }) {
         const json = (await res.json()) as (ChartDataPoint & { open: number, high: number, low: number, close: number, time: number })[];
         
         // Format data for Recharts
-        const formatted = json.map((d) => ({
-          ...d,
-          dateStr: format(new Date(d.time * 1000), 'MMM dd'),
-          // Range for the Bar component
-          ohlc: [Math.min(d.open, d.close), Math.max(d.open, d.close)] as [number, number],
-        }));
+        const formatted = json.map((d, i, arr) => {
+          const ma = (period: number) => {
+            if (i < period - 1) return undefined;
+            const sum = arr.slice(i - period + 1, i + 1).reduce((s, x) => s + x.close, 0);
+            return sum / period;
+          };
+          return {
+            ...d,
+            dateStr: format(new Date(d.time * 1000), 'MMM dd'),
+            ohlc: [Math.min(d.open, d.close), Math.max(d.open, d.close)] as [number, number],
+            ma10: ma(10),
+            ma20: ma(20),
+            volume: d.volume,
+            volumeMa: (() => {
+              const period = 20;
+              if (i < period - 1) return undefined;
+              const sum = arr.slice(i - period + 1, i + 1).reduce((s, x) => s + (x.volume ?? 0), 0);
+              return sum / period;
+            })(),
+          };
+        });
         setChartData(formatted);
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'Unknown error');
@@ -141,56 +188,94 @@ function ChartView({ ticker }: { ticker: string }) {
 
   const minPrice = Math.min(...chartData.map(d => d.low));
   const maxPrice = Math.max(...chartData.map(d => d.high));
+  const maxVolume = Math.max(...chartData.map(d => d.volume ?? 0));
 
   return (
     <div className="p-6 bg-slate-900 border-t border-slate-700">
       <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-        <BarChart2 className="text-blue-400" /> {ticker} - 3 Months Price History
+        <BarChart2 className="text-blue-400" /> {ticker} - 6 Months Price History
       </h3>
-      <div className="h-[350px] w-full">
+      <div className="h-[400px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+          <ComposedChart data={chartData} margin={{ top: 10, right: 60, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-            <XAxis dataKey="dateStr" stroke="#94a3b8" fontSize={12} tickMargin={10} minTickGap={30} />
-            <YAxis 
-              domain={[minPrice * 0.98, maxPrice * 1.02]} 
-              stroke="#94a3b8" 
-              fontSize={12} 
-              tickFormatter={(val) => val.toLocaleString()} 
+            <XAxis dataKey="dateStr" stroke="#94a3b8" fontSize={11} tickMargin={8} minTickGap={40} />
+            {/* Price axis */}
+            <YAxis
+              yAxisId="price"
+              domain={[minPrice * 0.985, maxPrice * 1.015]}
+              stroke="#94a3b8"
+              fontSize={11}
+              tickFormatter={(val) => val.toLocaleString()}
               orientation="right"
+              width={70}
             />
-            <Tooltip 
+            {/* Volume axis — hidden, domain inflated 4x so bars occupy ~25% at bottom */}
+            <YAxis
+              yAxisId="volume"
+              domain={[0, maxVolume * 4]}
+              hide
+            />
+            <Tooltip
               contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f1f5f9' }}
               itemStyle={{ color: '#60a5fa' }}
               labelStyle={{ color: '#94a3b8', marginBottom: '4px', fontWeight: 'bold' }}
-              formatter={(value: unknown, name: string, props: { payload: ChartDataPoint }) => {
+              formatter={(value: unknown, name: unknown, props: { payload?: ChartDataPoint }) => {
                 if (name === 'OHLC' && props.payload) {
                   const { open, high, low, close } = props.payload;
                   return [
-                    `O: ${open.toLocaleString()} H: ${high.toLocaleString()} L: ${low.toLocaleString()} C: ${close.toLocaleString()}`,
+                    `O: ${open.toLocaleString()}  H: ${high.toLocaleString()}  L: ${low.toLocaleString()}  C: ${close.toLocaleString()}`,
                     'Price'
                   ];
                 }
-                return [value as string, name];
+                if (name === 'Volume') {
+                  const v = Number(value);
+                  return [v >= 1e6 ? `${(v/1e6).toFixed(2)}M` : v >= 1e3 ? `${(v/1e3).toFixed(0)}K` : String(v), 'Volume'];
+                }
+                return [value as string, String(name)];
               }}
             />
-            <Bar 
-              dataKey="ohlc" 
+            {/* Volume bars and MA at bottom (behind candles) */}
+            <VolumeLayer data={chartData} />
+            <Line yAxisId="volume" type="monotone" dataKey="volumeMa" stroke="#f59e0b99" strokeWidth={1.5} dot={false} name="Vol MA20" connectNulls />
+            {/* Wicks then bodies then MA lines on top */}
+            <WickLayer data={chartData} yAxisId="price" />
+            <Bar
+              yAxisId="price"
+              dataKey="ohlc"
               name="OHLC"
-              shape={<Candlestick />}
+              shape={<CandleBody />}
+              isAnimationActive={false}
             />
+            <Line yAxisId="price" type="monotone" dataKey="ma10" stroke="#f59e0b" strokeWidth={1.5} dot={false} name="MA10" connectNulls />
+            <Line yAxisId="price" type="monotone" dataKey="ma20" stroke="#60a5fa" strokeWidth={1.5} dot={false} name="MA20" connectNulls />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-      
-      <div className="h-[150px] w-full mt-6">
+
+      <div className="h-[120px] w-full mt-4">
+        <h4 className="text-sm font-semibold mb-2 text-slate-400">RSI (14)</h4>
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={chartData} margin={{ top: 10, right: 60, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+            <XAxis dataKey="dateStr" stroke="#94a3b8" fontSize={11} hide />
+            <YAxis domain={[0, 100]} stroke="#94a3b8" fontSize={11} ticks={[30, 70]} width={70} orientation="right" />
+            <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f1f5f9' }} />
+            <ReferenceLine y={70} stroke="#f43f5e" strokeDasharray="5 5" />
+            <ReferenceLine y={30} stroke="#10b981" strokeDasharray="5 5" />
+            <Line type="monotone" dataKey="rsi" stroke="#a78bfa" strokeWidth={1.5} dot={false} name="RSI" connectNulls />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="h-[120px] w-full mt-4">
         <h4 className="text-sm font-semibold mb-2 text-slate-400">MACD (12, 26, 9)</h4>
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+          <ComposedChart data={chartData} margin={{ top: 10, right: 60, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-            <XAxis dataKey="dateStr" stroke="#94a3b8" fontSize={12} hide />
-            <YAxis stroke="#94a3b8" fontSize={12} />
-            <Tooltip 
+            <XAxis dataKey="dateStr" stroke="#94a3b8" fontSize={11} hide />
+            <YAxis stroke="#94a3b8" fontSize={11} width={70} orientation="right" />
+            <Tooltip
               contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f1f5f9' }}
             />
             <Bar dataKey="macdHistogram" name="Histogram">
@@ -204,13 +289,13 @@ function ChartView({ ticker }: { ticker: string }) {
         </ResponsiveContainer>
       </div>
 
-      <div className="h-[150px] w-full mt-8">
+      <div className="h-[120px] w-full mt-4">
         <h4 className="text-sm font-semibold mb-2 text-slate-400">Stochastic RSI (14, 14, 3, 3)</h4>
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+          <ComposedChart data={chartData} margin={{ top: 10, right: 60, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-            <XAxis dataKey="dateStr" stroke="#94a3b8" fontSize={12} hide />
-            <YAxis domain={[0, 100]} stroke="#94a3b8" fontSize={12} ticks={[0, 20, 80, 100]} />
+            <XAxis dataKey="dateStr" stroke="#94a3b8" fontSize={11} hide />
+            <YAxis domain={[0, 100]} stroke="#94a3b8" fontSize={11} ticks={[20, 80]} width={70} orientation="right" />
             <Tooltip 
               contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f1f5f9' }}
             />
@@ -226,6 +311,8 @@ function ChartView({ ticker }: { ticker: string }) {
     </div>
   );
 }
+
+const MASTER_ID = 'master';
 
 export default function Home() {
   const [data, setData] = useState<StockIndicatorResult[]>([]);
@@ -247,27 +334,26 @@ export default function Home() {
   // Initial load from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('vn_stock_watchlists');
+    let lists: Watchlist[] = [];
     if (saved) {
       try {
-        const parsed = JSON.parse(saved) as Watchlist[];
-        setWatchlists(parsed);
-        if (parsed.length > 0) {
-          setActiveWatchlistId(parsed[0].id);
-        }
+        lists = JSON.parse(saved) as Watchlist[];
       } catch (e) {
         console.error('Failed to parse watchlists', e);
       }
-    } else {
-      // Default watchlist if none exists
-      const defaultWatchlist: Watchlist = {
-        id: 'default',
-        name: 'Main Watchlist',
-        tickers: ['ACB', 'SHB', 'VCB', 'TCB', 'VPB', 'MBB', 'STB']
-      };
-      setWatchlists([defaultWatchlist]);
-      setActiveWatchlistId('default');
-      localStorage.setItem('vn_stock_watchlists', JSON.stringify([defaultWatchlist]));
     }
+    // Ensure master watchlist always exists at the top
+    if (!lists.find(w => w.id === MASTER_ID)) {
+      const master: Watchlist = { id: MASTER_ID, name: 'All Tickers', tickers: [] };
+      lists = [master, ...lists];
+    }
+    if (lists.length === 1) {
+      // Only master exists — add a default watchlist
+      const def: Watchlist = { id: 'default', name: 'Main Watchlist', tickers: ['ACB', 'SHB', 'VCB', 'TCB', 'VPB', 'MBB', 'STB'] };
+      lists = [lists[0], def];
+    }
+    setWatchlists(lists);
+    setActiveWatchlistId(lists[0].id);
   }, []);
 
   const activeWatchlist = useMemo(() => 
@@ -318,11 +404,23 @@ export default function Home() {
   };
 
   const deleteWatchlist = () => {
-    if (watchlists.length <= 1) return;
+    if (activeWatchlistId === MASTER_ID) return;
+    if (watchlists.filter(w => w.id !== MASTER_ID).length <= 1) return;
     const remaining = watchlists.filter(w => w.id !== activeWatchlistId);
     setWatchlists(remaining);
     setActiveWatchlistId(remaining[0].id);
   };
+
+  const syncMasterWatchlist = useCallback(() => {
+    const allTickers = Array.from(new Set(
+      watchlists
+        .filter(w => w.id !== MASTER_ID)
+        .flatMap(w => w.tickers)
+    ));
+    setWatchlists(prev => prev.map(w =>
+      w.id === MASTER_ID ? { ...w, tickers: allTickers } : w
+    ));
+  }, [watchlists]);
 
   const renameWatchlist = () => {
     if (!newName.trim()) {
@@ -438,13 +536,15 @@ export default function Home() {
 
             <div className="space-y-4">
               <div className="relative">
-                <select 
+                <select
                   value={activeWatchlistId}
                   onChange={(e) => setActiveWatchlistId(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none"
                 >
                   {watchlists.map(w => (
-                    <option key={w.id} value={w.id}>{w.name}</option>
+                    <option key={w.id} value={w.id}>
+                      {w.id === MASTER_ID ? `★ ${w.name}` : w.name}
+                    </option>
                   ))}
                 </select>
                 <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-slate-500">
@@ -453,38 +553,50 @@ export default function Home() {
               </div>
 
               {activeWatchlist && (
-                <div className="flex gap-2">
-                  {isEditingName ? (
-                    <div className="flex w-full gap-2">
-                      <input 
-                        type="text"
-                        value={newName}
-                        onChange={(e) => setNewName(e.target.value)}
-                        onBlur={renameWatchlist}
-                        onKeyDown={(e) => e.key === 'Enter' && renameWatchlist()}
-                        autoFocus
-                        className="flex-1 bg-slate-900 border border-blue-500 rounded-md px-2 py-1 text-sm outline-none"
-                      />
-                      <button onClick={renameWatchlist} className="text-emerald-400"><Save size={18}/></button>
-                    </div>
-                  ) : (
-                    <>
-                      <button 
-                        onClick={() => { setIsEditingName(true); setNewName(activeWatchlist.name); }}
-                        className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md text-xs transition-colors"
-                      >
-                        <Edit2 size={12} /> Rename
-                      </button>
-                      <button 
-                        onClick={deleteWatchlist}
-                        disabled={watchlists.length <= 1}
-                        className="flex items-center justify-center gap-1 px-3 py-1.5 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 rounded-md text-xs transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                      >
-                        <Trash2 size={12} /> Delete
-                      </button>
-                    </>
-                  )}
-                </div>
+                activeWatchlistId === MASTER_ID ? (
+                  <div className="space-y-2">
+                    <p className="text-[11px] text-slate-500">Aggregates all tickers from every other watchlist.</p>
+                    <button
+                      onClick={syncMasterWatchlist}
+                      className="w-full flex items-center justify-center gap-2 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-md text-xs transition-colors"
+                    >
+                      <RefreshCw size={12} /> Sync from all watchlists
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    {isEditingName ? (
+                      <div className="flex w-full gap-2">
+                        <input
+                          type="text"
+                          value={newName}
+                          onChange={(e) => setNewName(e.target.value)}
+                          onBlur={renameWatchlist}
+                          onKeyDown={(e) => e.key === 'Enter' && renameWatchlist()}
+                          autoFocus
+                          className="flex-1 bg-slate-900 border border-blue-500 rounded-md px-2 py-1 text-sm outline-none"
+                        />
+                        <button onClick={renameWatchlist} className="text-emerald-400"><Save size={18}/></button>
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => { setIsEditingName(true); setNewName(activeWatchlist.name); }}
+                          className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md text-xs transition-colors"
+                        >
+                          <Edit2 size={12} /> Rename
+                        </button>
+                        <button
+                          onClick={deleteWatchlist}
+                          disabled={watchlists.filter(w => w.id !== MASTER_ID).length <= 1}
+                          className="flex items-center justify-center gap-1 px-3 py-1.5 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 rounded-md text-xs transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          <Trash2 size={12} /> Delete
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )
               )}
 
               <form onSubmit={addTicker} className="flex gap-2 pt-2 border-t border-slate-700/50">

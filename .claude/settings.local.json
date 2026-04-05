@@ -6,7 +6,11 @@
       "Bash(node -e \"const d=require\\(''''fs''''\\).readFileSync\\(''''/dev/stdin'''',''''utf8''''\\); const j=JSON.parse\\(d\\); const r=j.quoteResponse?.result?.[0]; console.log\\(JSON.stringify\\(r,null,2\\)\\);\")",
       "Bash(node:*)",
       "Bash(npm install:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(grep -r Customized C:WorkLabteststockvn-stock-filternode_modulesrechartssrc --include=*.tsx -l)",
+      "Bash(grep -r Customized C:WorkLabteststockvn-stock-filternode_modulesrechartses --include=*.js -l)",
+      "Bash(node -e \":*)",
+      "Bash(grep -r \"useXAxisScale\\\\|useYAxisScale\" C:WorkLabteststockvn-stock-filternode_modulesrechartstypes --include=*.d.ts -l)"
     ]
   }
 }

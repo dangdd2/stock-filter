@@ -22,6 +22,11 @@ export interface StockIndicatorResult {
   macdHistogram: number | null;
   volume: number;
   timestamp: number;
+  pe?: number | null;
+  eps?: number | null;
+  beta?: number | null;
+  marketCap?: number | null;
+  bookValue?: number | null;
   error?: string;
 }
 
@@ -333,14 +338,20 @@ export default function Home() {
   const addTicker = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTicker.trim() || !activeWatchlist) return;
-    const ticker = newTicker.trim().toUpperCase();
-    if (activeWatchlist.tickers.includes(ticker)) {
+    
+    // Split by comma, trim, uppercase, and filter out empties
+    const tickersToAdd = newTicker
+      .split(',')
+      .map(t => t.trim().toUpperCase())
+      .filter(t => t !== '' && !activeWatchlist.tickers.includes(t));
+
+    if (tickersToAdd.length === 0) {
       setNewTicker('');
       return;
     }
     
     setWatchlists(watchlists.map(w => 
-      w.id === activeWatchlistId ? { ...w, tickers: [...w.tickers, ticker] } : w
+      w.id === activeWatchlistId ? { ...w, tickers: [...w.tickers, ...tickersToAdd] } : w
     ));
     setNewTicker('');
   };
@@ -610,19 +621,24 @@ export default function Home() {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-900/50 text-slate-400 text-xs uppercase tracking-wider">
-                    <th className="px-6 py-4 font-medium">Ticker</th>
-                    <th className="px-6 py-4 font-medium">Price</th>
-                    <th className="px-6 py-4 font-medium">RSI</th>
-                    <th className="px-6 py-4 font-medium">Stoch RSI</th>
-                    <th className="px-6 py-4 font-medium">MACD Hist</th>
-                    <th className="px-6 py-4 font-medium text-right">Actions</th>
+                  <tr className="bg-slate-900/50 text-slate-400 text-[10px] uppercase tracking-wider">
+                    <th className="px-4 py-4 font-medium">Ticker</th>
+                    <th className="px-4 py-4 font-medium">Price</th>
+                    <th className="px-4 py-4 font-medium">P/E</th>
+                    <th className="px-4 py-4 font-medium">EPS</th>
+                    <th className="px-4 py-4 font-medium">Beta</th>
+                    <th className="px-4 py-4 font-medium">Mkt Cap</th>
+                    <th className="px-4 py-4 font-medium">BV/Share</th>
+                    <th className="px-4 py-4 font-medium">RSI</th>
+                    <th className="px-4 py-4 font-medium">Stoch RSI</th>
+                    <th className="px-4 py-4 font-medium">MACD Hist</th>
+                    <th className="px-4 py-4 font-medium text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700/50">
                   {loading ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
+                      <td colSpan={11} className="px-6 py-12 text-center text-slate-500">
                         <div className="flex flex-col items-center justify-center gap-3">
                           <RefreshCw size={24} className="animate-spin text-blue-500" />
                           <p>Analyzing technical indicators...</p>
@@ -631,7 +647,7 @@ export default function Home() {
                     </tr>
                   ) : filteredData.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
+                      <td colSpan={11} className="px-6 py-12 text-center text-slate-500">
                         {activeWatchlist && activeWatchlist.tickers.length === 0 
                           ? "Your watchlist is empty. Add some tickers to get started!" 
                           : "No stocks match the selected filters."}
@@ -653,76 +669,89 @@ export default function Home() {
 
                       const isExpanded = expandedTicker === item.ticker;
 
+                      const formatMarketCap = (val?: number | null) => {
+                        if (!val) return '-';
+                        if (val >= 1e12) return `${(val / 1e12).toFixed(2)}T`;
+                        if (val >= 1e9) return `${(val / 1e9).toFixed(2)}B`;
+                        if (val >= 1e6) return `${(val / 1e6).toFixed(2)}M`;
+                        return val.toLocaleString();
+                      };
+
                       return (
                         <Fragment key={item.ticker}>
                           <tr className={`hover:bg-slate-700/20 transition-colors ${isExpanded ? 'bg-slate-700/20' : ''}`}>
-                            <td className="px-6 py-4">
+                            <td className="px-4 py-4">
                               <div className="font-bold text-slate-200">{item.ticker}</div>
                               {item.timestamp && (
-                                <div className="text-[10px] text-slate-500">
-                                  {format(new Date(item.timestamp * 1000), 'MMM dd, yyyy')}
+                                <div className="text-[10px] text-slate-500 whitespace-nowrap">
+                                  {format(new Date(item.timestamp * 1000), 'MMM dd')}
                                 </div>
                               )}
                             </td>
-                            <td className="px-6 py-4 font-mono text-slate-300 text-sm">
+                            <td className="px-4 py-4 font-mono text-slate-300 text-sm">
                               {item.price ? item.price.toLocaleString() : '-'}
                             </td>
-                            <td className={`px-6 py-4 font-mono font-medium text-sm ${rsiColor}`}>
+                            <td className="px-4 py-4 font-mono text-slate-400 text-xs">
+                              {item.pe ? item.pe.toFixed(2) : '-'}
+                            </td>
+                            <td className="px-4 py-4 font-mono text-slate-400 text-xs">
+                              {item.eps ? item.eps.toLocaleString() : '-'}
+                            </td>
+                            <td className="px-4 py-4 font-mono text-slate-400 text-xs">
+                              {item.beta ? item.beta.toFixed(2) : '-'}
+                            </td>
+                            <td className="px-4 py-4 font-mono text-slate-400 text-xs">
+                              {formatMarketCap(item.marketCap)}
+                            </td>
+                            <td className="px-4 py-4 font-mono text-slate-400 text-xs">
+                              {item.bookValue ? item.bookValue.toLocaleString() : '-'}
+                            </td>
+                            <td className={`px-4 py-4 font-mono font-medium text-sm ${rsiColor}`}>
                               {item.rsi !== null ? item.rsi.toFixed(2) : '-'}
                             </td>
-                            <td className={`px-6 py-4 font-mono text-sm ${stochColor}`}>
+                            <td className={`px-4 py-4 font-mono text-sm ${stochColor}`}>
                               {item.stochK !== null && item.stochK !== undefined && item.stochD !== null && item.stochD !== undefined ? (
                                 <div className="flex flex-col">
-                                  <span>K: {item.stochK.toFixed(2)}</span>
-                                  <span className="text-[10px] opacity-70 text-slate-400">D: {item.stochD.toFixed(2)}</span>
+                                  <span>K: {item.stochK.toFixed(1)}</span>
+                                  <span className="text-[10px] opacity-70 text-slate-400">D: {item.stochD.toFixed(1)}</span>
                                 </div>
                               ) : '-'}
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="px-4 py-4">
                               {item.macdHistogram !== null && item.macdHistogram !== undefined ? (
                                 <div className="flex items-center gap-2">
                                   <span className={`font-mono text-xs ${item.macdHistogram > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                    {item.macdHistogram.toFixed(2)}
+                                    {item.macdHistogram.toFixed(1)}
                                   </span>
-                                  <div className="w-12 h-4 bg-slate-900 rounded overflow-hidden flex items-center">
-                                    <div 
-                                      className={`h-full ${item.macdHistogram > 0 ? 'bg-emerald-500' : 'bg-rose-500'} transition-all`}
-                                      style={{ 
-                                        width: `${Math.min(100, Math.abs(item.macdHistogram) * 10)}%`,
-                                        marginLeft: item.macdHistogram < 0 ? 'auto' : '0',
-                                        marginRight: item.macdHistogram > 0 ? 'auto' : '0'
-                                      }}
-                                    />
-                                  </div>
                                 </div>
                               ) : '-'}
                             </td>
-                            <td className="px-6 py-4 text-right">
+                            <td className="px-4 py-4 text-right">
                               <div className="flex justify-end gap-2">
                                 <button
                                   onClick={() => toggleChart(item.ticker)}
-                                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors border ${
+                                  className={`p-1.5 rounded-md transition-colors border ${
                                     isExpanded 
-                                      ? 'bg-slate-700 text-slate-200 border-slate-600 hover:bg-slate-600' 
-                                      : 'bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20'
+                                      ? 'bg-slate-700 text-slate-200 border-slate-600' 
+                                      : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
                                   }`}
+                                  title={isExpanded ? 'Close Chart' : 'View Chart'}
                                 >
-                                  {isExpanded ? <X size={14} /> : <BarChart2 size={14} />}
-                                  {isExpanded ? 'Close' : 'Chart'}
+                                  {isExpanded ? <X size={16} /> : <BarChart2 size={16} />}
                                 </button>
                                 <button
                                   onClick={() => removeTicker(item.ticker)}
                                   className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-md transition-colors"
-                                  title="Remove from watchlist"
+                                  title="Remove"
                                 >
-                                  <Trash2 size={14} />
+                                  <Trash2 size={16} />
                                 </button>
                               </div>
                             </td>
                           </tr>
                           {isExpanded && (
                             <tr>
-                              <td colSpan={7} className="p-0">
+                              <td colSpan={11} className="p-0">
                                 <ChartView ticker={item.ticker} />
                               </td>
                             </tr>

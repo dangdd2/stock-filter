@@ -1,4 +1,7 @@
 import { RSI, MACD, StochasticRSI } from 'technicalindicators';
+import YahooFinance from 'yahoo-finance2';
+
+const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 
 export interface StockIndicatorResult {
   ticker: string;
@@ -11,28 +14,42 @@ export interface StockIndicatorResult {
   macdHistogram: number | null;
   volume: number;
   timestamp: number;
+  // Fundamental data
+  pe?: number | null;
+  eps?: number | null;
+  beta?: number | null;
+  marketCap?: number | null;
+  bookValue?: number | null;
   error?: string;
 }
 
 export async function fetchStockData(ticker: string): Promise<StockIndicatorResult> {
   const symbol = `${ticker}.VN`;
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=6mo`;
+  const chartUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=6mo`;
 
   try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      cache: 'no-store'
-    });
-    
-    if (!res.ok) {
-      throw new Error(`Failed to fetch ${ticker}`);
-    }
+    // Fetch chart data (essential)
+    const chartRes = await fetch(chartUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, cache: 'no-store' });
+    if (!chartRes.ok) throw new Error(`Failed to fetch chart for ${ticker}`);
+    const chartData = await chartRes.json();
+    const result = chartData.chart?.result?.[0];
+    if (!result) throw new Error(`No data for ${ticker}`);
 
-    const data = await res.json();
-    const result = data.chart?.result?.[0];
-    
-    if (!result) {
-      throw new Error(`No data for ${ticker}`);
+    // Fetch fundamental data (optional)
+    let pe: number | null = null;
+    let eps: number | null = null;
+    let beta: number | null = null;
+    let marketCap: number | null = null;
+    let bookValue: number | null = null;
+    try {
+      const summary = await yf.quoteSummary(symbol, { modules: ['defaultKeyStatistics', 'summaryDetail'] });
+      pe = summary.summaryDetail?.trailingPE ?? summary.summaryDetail?.forwardPE ?? null;
+      eps = summary.defaultKeyStatistics?.trailingEps ?? summary.defaultKeyStatistics?.forwardEps ?? null;
+      beta = summary.defaultKeyStatistics?.beta ?? summary.summaryDetail?.beta ?? null;
+      marketCap = summary.summaryDetail?.marketCap ?? null;
+      bookValue = summary.defaultKeyStatistics?.bookValue ?? null;
+    } catch (e) {
+      console.warn(`Fundamental data fetch failed for ${ticker}`, e);
     }
 
     const timestamps = result.timestamp || [];
@@ -90,6 +107,11 @@ export async function fetchStockData(ticker: string): Promise<StockIndicatorResu
       macd: macdValues.length > 0 ? macdValues[macdValues.length - 1].MACD || null : null,
       macdSignal: macdValues.length > 0 ? macdValues[macdValues.length - 1].signal || null : null,
       macdHistogram: macdValues.length > 0 ? macdValues[macdValues.length - 1].histogram || null : null,
+      pe,
+      eps,
+      beta,
+      marketCap,
+      bookValue,
     };
   } catch (error: unknown) {
     return {
@@ -103,6 +125,11 @@ export async function fetchStockData(ticker: string): Promise<StockIndicatorResu
       macd: null,
       macdSignal: null,
       macdHistogram: null,
+      pe: null,
+      eps: null,
+      beta: null,
+      marketCap: null,
+      bookValue: null,
       error: error instanceof Error ? error.message : 'Unknown error'
     };
   }

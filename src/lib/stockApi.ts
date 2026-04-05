@@ -1,0 +1,217 @@
+import { RSI, MACD, StochasticRSI } from 'technicalindicators';
+
+export interface StockIndicatorResult {
+  ticker: string;
+  price: number;
+  rsi: number | null;
+  stochK: number | null;
+  stochD: number | null;
+  macd: number | null;
+  macdSignal: number | null;
+  macdHistogram: number | null;
+  volume: number;
+  timestamp: number;
+  error?: string;
+}
+
+export async function fetchStockData(ticker: string): Promise<StockIndicatorResult> {
+  const symbol = `${ticker}.VN`;
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=6mo`;
+
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      cache: 'no-store'
+    });
+    
+    if (!res.ok) {
+      throw new Error(`Failed to fetch ${ticker}`);
+    }
+
+    const data = await res.json();
+    const result = data.chart?.result?.[0];
+    
+    if (!result) {
+      throw new Error(`No data for ${ticker}`);
+    }
+
+    const timestamps = result.timestamp || [];
+    const quote = result.indicators.quote[0];
+    const closes: number[] = quote.close || [];
+    const volumes: number[] = quote.volume || [];
+
+    // Filter out nulls
+    const validData = [];
+    for (let i = 0; i < closes.length; i++) {
+      if (closes[i] !== null && closes[i] !== undefined) {
+        validData.push({
+          close: closes[i],
+          volume: volumes[i],
+          time: timestamps[i]
+        });
+      }
+    }
+
+    if (validData.length < 30) {
+      throw new Error(`Not enough data for ${ticker}`);
+    }
+
+    const closePrices = validData.map(d => d.close);
+    const lastData = validData[validData.length - 1];
+
+    const rsiValues = RSI.calculate({ values: closePrices, period: 14 });
+    const macdValues = MACD.calculate({
+      values: closePrices,
+      fastPeriod: 12,
+      slowPeriod: 26,
+      signalPeriod: 9,
+      SimpleMAOscillator: false,
+      SimpleMASignal: false
+    });
+
+    const stochRsiValues = StochasticRSI.calculate({
+      values: closePrices,
+      rsiPeriod: 14,
+      stochasticPeriod: 14,
+      kPeriod: 3,
+      dPeriod: 3,
+    });
+
+    const lastStoch = stochRsiValues.length > 0 ? stochRsiValues[stochRsiValues.length - 1] : null;
+
+    return {
+      ticker,
+      price: lastData.close,
+      volume: lastData.volume,
+      timestamp: lastData.time,
+      rsi: rsiValues.length > 0 ? rsiValues[rsiValues.length - 1] : null,
+      stochK: lastStoch ? (lastStoch as { k: number }).k : null,
+      stochD: lastStoch ? (lastStoch as { d: number }).d : null,
+      macd: macdValues.length > 0 ? macdValues[macdValues.length - 1].MACD || null : null,
+      macdSignal: macdValues.length > 0 ? macdValues[macdValues.length - 1].signal || null : null,
+      macdHistogram: macdValues.length > 0 ? macdValues[macdValues.length - 1].histogram || null : null,
+    };
+  } catch (error: unknown) {
+    return {
+      ticker,
+      price: 0,
+      volume: 0,
+      timestamp: 0,
+      rsi: null,
+      stochK: null,
+      stochD: null,
+      macd: null,
+      macdSignal: null,
+      macdHistogram: null,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+}
+
+export async function fetchTickersIndicators(tickers: string[]): Promise<StockIndicatorResult[]> {
+  const promises = tickers.map(ticker => fetchStockData(ticker.toUpperCase()));
+  return await Promise.all(promises);
+}
+
+export interface StockChartData {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  rsi: number | null;
+  stochK: number | null;
+  stochD: number | null;
+  macd: number | null;
+  macdSignal: number | null;
+  macdHistogram: number | null;
+}
+
+export async function fetchStockChartData(ticker: string): Promise<StockChartData[]> {
+  const symbol = `${ticker}.VN`;
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=6mo`;
+
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      cache: 'no-store'
+    });
+    
+    if (!res.ok) throw new Error(`Failed to fetch ${ticker}`);
+
+    const data = await res.json();
+    const result = data.chart?.result?.[0];
+    if (!result) throw new Error(`No data for ${ticker}`);
+
+    const timestamps = result.timestamp || [];
+    const quote = result.indicators.quote[0];
+    const closes: number[] = quote.close || [];
+    const opens: number[] = quote.open || [];
+    const highs: number[] = quote.high || [];
+    const lows: number[] = quote.low || [];
+
+    const validData = [];
+    for (let i = 0; i < closes.length; i++) {
+      if (closes[i] !== null && closes[i] !== undefined && 
+          opens[i] !== null && opens[i] !== undefined &&
+          highs[i] !== null && highs[i] !== undefined &&
+          lows[i] !== null && lows[i] !== undefined) {
+        validData.push({
+          close: closes[i],
+          open: opens[i],
+          high: highs[i],
+          low: lows[i],
+          time: timestamps[i]
+        });
+      }
+    }
+
+    if (validData.length < 30) throw new Error(`Not enough data for ${ticker}`);
+
+    const closePrices = validData.map(d => d.close);
+
+    const rsiValues = RSI.calculate({ values: closePrices, period: 14 });
+    const macdValues = MACD.calculate({
+      values: closePrices,
+      fastPeriod: 12,
+      slowPeriod: 26,
+      signalPeriod: 9,
+      SimpleMAOscillator: false,
+      SimpleMASignal: false
+    });
+
+    const stochRsiValues = StochasticRSI.calculate({
+      values: closePrices,
+      rsiPeriod: 14,
+      stochasticPeriod: 14,
+      kPeriod: 3,
+      dPeriod: 3,
+    });
+
+    const rsiOffset = validData.length - rsiValues.length;
+    const macdOffset = validData.length - macdValues.length;
+    const stochOffset = validData.length - stochRsiValues.length;
+
+    return validData.map((d, index) => {
+      const rsi = index >= rsiOffset ? rsiValues[index - rsiOffset] : null;
+      const macd = index >= macdOffset ? macdValues[index - macdOffset] : null;
+      const stoch = index >= stochOffset ? stochRsiValues[index - stochOffset] : null;
+
+      return {
+        time: d.time,
+        open: d.open,
+        high: d.high,
+        low: d.low,
+        close: d.close,
+        rsi: rsi,
+        stochK: stoch ? (stoch as { k: number }).k : null,
+        stochD: stoch ? (stoch as { d: number }).d : null,
+        macd: macd?.MACD ?? null,
+        macdSignal: macd?.signal ?? null,
+        macdHistogram: macd?.histogram ?? null,
+      };
+    });
+  } catch (error: unknown) {
+    throw error instanceof Error ? error : new Error('Unknown error');
+  }
+}

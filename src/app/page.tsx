@@ -30,6 +30,9 @@ export interface StockIndicatorResult {
   bbUpper?: number | null;
   bbMiddle?: number | null;
   bbLower?: number | null;
+  closes7d?: number[];
+  change?: number | null;
+  changePct?: number | null;
   error?: string;
 }
 
@@ -689,6 +692,28 @@ function AiPanel({
   );
 }
 
+function Sparkline({ values, width = 64, height = 24 }: { values: number[]; width?: number; height?: number }) {
+  if (!values || values.length < 2) return null;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const pad = 2;
+  const w = width - pad * 2;
+  const h = height - pad * 2;
+  const points = values.map((v, i) => {
+    const x = pad + (i / (values.length - 1)) * w;
+    const y = pad + (1 - (v - min) / range) * h;
+    return `${x},${y}`;
+  }).join(' ');
+  const up = values[values.length - 1] >= values[0];
+  const color = up ? '#34d399' : '#f87171'; // emerald-400 / red-400
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="shrink-0">
+      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 const MASTER_ID = 'master';
 
 export default function Home() {
@@ -699,6 +724,7 @@ export default function Home() {
   const [tableDragIdx, setTableDragIdx] = useState<number | null>(null);
   const [tableDragOverIdx, setTableDragOverIdx] = useState<number | null>(null);
   const preventFetch = useRef(false);
+  const pendingExpandTicker = useRef<string | null>(null);
 
   const [rsiFilter, setRsiFilter] = useState<RsiFilter>('ALL');
   const [macdFilter, setMacdFilter] = useState<MacdFilter>('ALL');
@@ -723,6 +749,10 @@ export default function Home() {
   const [renamingValue, setRenamingValue] = useState('');
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  // Master watchlist signal data (always tracks All Tickers)
+  const [masterData, setMasterData] = useState<StockIndicatorResult[]>([]);
+  const [masterLoading, setMasterLoading] = useState(false);
 
   // Initial load from localStorage
   useEffect(() => {
@@ -749,9 +779,11 @@ export default function Home() {
     setActiveWatchlistId(lists[0].id);
   }, []);
 
-  const activeWatchlist = useMemo(() => 
+  const activeWatchlist = useMemo(() =>
     watchlists.find(w => w.id === activeWatchlistId)
   , [watchlists, activeWatchlistId]);
+
+  const masterWatchlist = useMemo(() => watchlists.find(w => w.id === MASTER_ID), [watchlists]);
 
   const fetchData = useCallback(async () => {
     if (!activeWatchlist || activeWatchlist.tickers.length === 0) {
@@ -781,6 +813,29 @@ export default function Home() {
     }
     if (activeWatchlistId) fetchData();
   }, [activeWatchlistId, fetchData]);
+
+  const fetchMasterData = useCallback(async () => {
+    const tickers = masterWatchlist?.tickers ?? [];
+    if (tickers.length === 0) { setMasterData([]); return; }
+    setMasterLoading(true);
+    try {
+      const res = await fetch(`/api/stocks?tickers=${tickers.join(',')}`);
+      if (!res.ok) throw new Error('Failed');
+      setMasterData(await res.json());
+    } catch { /* silent */ } finally {
+      setMasterLoading(false);
+    }
+  }, [masterWatchlist]);
+
+  // When master is the active watchlist, reuse its data directly (no double-fetch)
+  useEffect(() => {
+    if (activeWatchlistId === MASTER_ID) setMasterData(data);
+  }, [data, activeWatchlistId]);
+
+  // When a non-master watchlist is active, fetch master data separately
+  useEffect(() => {
+    if (activeWatchlistId !== MASTER_ID) fetchMasterData();
+  }, [fetchMasterData, activeWatchlistId]);
 
   // Sync to localStorage
   useEffect(() => {
@@ -961,13 +1016,62 @@ export default function Home() {
   // Keep rowData in sync with filteredData (reset on new fetch / filter change)
   useEffect(() => {
     setRowData(filteredData);
+    if (pendingExpandTicker.current) {
+      const ticker = pendingExpandTicker.current;
+      if (filteredData.some(d => d.ticker === ticker)) {
+        pendingExpandTicker.current = null;
+        setExpandedTicker(ticker);
+        setTimeout(() => {
+          document.getElementById(`row-${ticker}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+      }
+    }
   }, [filteredData]);
+
+  const { buySignals, sellSignals } = useMemo(() => {
+    const buy: Array<{ ticker: string; reasons: string[]; entry: number; target: number | null }> = [];
+    const sell: Array<{ ticker: string; reasons: string[]; entry: number; target: number | null }> = [];
+
+    masterData.forEach(item => {
+      if (item.error) return;
+      const br: string[] = [];
+      const sr: string[] = [];
+
+      if (item.rsi !== null && item.rsi !== undefined && item.rsi < 30) br.push(`RSI ${item.rsi.toFixed(0)}`);
+      if (item.rsi !== null && item.rsi !== undefined && item.rsi > 70) sr.push(`RSI ${item.rsi.toFixed(0)}`);
+      if (item.stochK !== null && item.stochK !== undefined && item.stochK < 20) br.push(`Stoch ${item.stochK.toFixed(0)}`);
+      if (item.stochK !== null && item.stochK !== undefined && item.stochK > 80) sr.push(`Stoch ${item.stochK.toFixed(0)}`);
+      if (item.bbLower != null && item.price < item.bbLower) br.push('BB↓');
+      if (item.bbUpper != null && item.price > item.bbUpper) sr.push('BB↑');
+
+      // BUY: entry = current price, target = BB middle (upside)
+      if (br.length) buy.push({ ticker: item.ticker, reasons: br, entry: item.price, target: item.bbMiddle ?? null });
+      // SELL: entry = current price, target = BB middle (downside)
+      if (sr.length) sell.push({ ticker: item.ticker, reasons: sr, entry: item.price, target: item.bbMiddle ?? null });
+    });
+
+    return { buySignals: buy, sellSignals: sell };
+  }, [masterData]);
 
   const toggleChart = (ticker: string) => {
     if (expandedTicker === ticker) {
       setExpandedTicker(null);
     } else {
       setExpandedTicker(ticker);
+    }
+  };
+
+  const handleSignalTickerClick = (ticker: string) => {
+    const isInCurrentData = data.some(d => d.ticker === ticker);
+    if (isInCurrentData) {
+      setExpandedTicker(prev => prev === ticker ? null : ticker);
+      setTimeout(() => {
+        document.getElementById(`row-${ticker}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 50);
+    } else {
+      // Switch to master watchlist and expand after data loads
+      pendingExpandTicker.current = ticker;
+      setActiveWatchlistId(MASTER_ID);
     }
   };
 
@@ -1171,6 +1275,94 @@ export default function Home() {
           </div>
         </div>
 
+        {/* ── Signals Summary Panel ── */}
+        {(buySignals.length > 0 || sellSignals.length > 0 || masterLoading) && (
+          <div className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 space-y-3">
+            <div className="flex items-center gap-2">
+              <Activity size={13} className="text-blue-400" />
+              <span className="text-xs font-bold text-slate-200 uppercase tracking-widest">Khuyến Nghị Cổ Phiếu</span>
+              {masterLoading && <RefreshCw size={11} className="animate-spin text-slate-400 ml-1" />}
+              <span className="text-xs text-slate-500 ml-1">— All Tickers</span>
+            </div>
+
+            {buySignals.length > 0 && (
+              <div className="flex flex-wrap items-start gap-2">
+                <span className="flex items-center gap-1 text-xs font-semibold text-emerald-400 shrink-0 pt-0.5 min-w-[70px]">
+                  <TrendingUp size={13} /> MUA ({buySignals.length})
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {buySignals.map(({ ticker, reasons, entry, target }) => (
+                    <div
+                      key={ticker}
+                      onClick={() => handleSignalTickerClick(ticker)}
+                      className="flex flex-col px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-xs cursor-pointer hover:bg-emerald-500/20 hover:border-emerald-500/40 transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-emerald-300">{ticker}</span>
+                        <span className="text-emerald-500/70">{reasons.join(' · ')}</span>
+                      </div>
+                      <div className="flex items-center gap-1 mt-0.5 text-[10px] text-slate-400">
+                        {target != null ? (
+                          <>
+                            <span className="text-emerald-400 font-medium">{entry.toLocaleString()}</span>
+                            <span className="text-slate-500">-</span>
+                            <span className="text-emerald-300 font-medium">{Math.round(target).toLocaleString()}</span>
+                            <span className="text-slate-500">(</span>
+                            <span className="text-emerald-300 font-semibold">
+                              +{(((target - entry) / entry) * 100).toFixed(1)}%
+                            </span>
+                            <span className="text-slate-500">)</span>
+                          </>
+                        ) : (
+                          <span className="text-emerald-400 font-medium">{entry.toLocaleString()}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {sellSignals.length > 0 && (
+              <div className="flex flex-wrap items-start gap-2">
+                <span className="flex items-center gap-1 text-xs font-semibold text-rose-400 shrink-0 pt-0.5 min-w-[70px]">
+                  <TrendingDown size={13} /> BÁN ({sellSignals.length})
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {sellSignals.map(({ ticker, reasons, entry, target }) => (
+                    <div
+                      key={ticker}
+                      onClick={() => handleSignalTickerClick(ticker)}
+                      className="flex flex-col px-2.5 py-1 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs cursor-pointer hover:bg-rose-500/20 hover:border-rose-500/40 transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-rose-300">{ticker}</span>
+                        <span className="text-rose-500/70">{reasons.join(' · ')}</span>
+                      </div>
+                      <div className="flex items-center gap-1 mt-0.5 text-[10px] text-slate-400">
+                        {target != null ? (
+                          <>
+                            <span className="text-rose-400 font-medium">{entry.toLocaleString()}</span>
+                            <span className="text-slate-500">-</span>
+                            <span className="text-rose-300 font-medium">{Math.round(target).toLocaleString()}</span>
+                            <span className="text-slate-500">(</span>
+                            <span className="text-rose-300 font-semibold">
+                              {(((target - entry) / entry) * 100).toFixed(1)}%
+                            </span>
+                            <span className="text-slate-500">)</span>
+                          </>
+                        ) : (
+                          <span className="text-rose-400 font-medium">{entry.toLocaleString()}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Main Content */}
         <section>
           {error && (
@@ -1191,6 +1383,7 @@ export default function Home() {
                     <th className="pl-3 pr-1 py-4 w-6" />
                     <th className="px-4 py-4 font-medium">Ticker</th>
                     <th className="px-4 py-4 font-medium">Price</th>
+                    <th className="px-4 py-4 font-medium">Change</th>
                     <th className="px-4 py-4 font-medium">P/E</th>
                     <th className="px-4 py-4 font-medium">EPS</th>
                     <th className="px-4 py-4 font-medium">Beta</th>
@@ -1205,14 +1398,35 @@ export default function Home() {
                 </thead>
                 <tbody className="divide-y divide-slate-700/50">
                   {loading ? (
-                    <tr>
-                      <td colSpan={12} className="px-6 py-12 text-center text-slate-500">
-                        <div className="flex flex-col items-center justify-center gap-3">
-                          <RefreshCw size={24} className="animate-spin text-blue-500" />
-                          <p>Analyzing technical indicators...</p>
-                        </div>
-                      </td>
-                    </tr>
+                    Array.from({ length: 6 }).map((_, i) => (
+                      <tr key={i} className="animate-pulse">
+                        <td className="pl-3 pr-1 py-4"><div className="w-3 h-3 bg-slate-700 rounded" /></td>
+                        <td className="px-4 py-4">
+                          <div className="h-3.5 w-10 bg-slate-700 rounded mb-1.5" />
+                          <div className="h-2 w-8 bg-slate-800 rounded" />
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-2">
+                            <div className="h-6 w-16 bg-slate-700 rounded" />
+                            <div className="h-3 w-14 bg-slate-700 rounded" />
+                          </div>
+                        </td>
+                        <td className="px-4 py-4"><div className="h-7 w-16 bg-slate-700 rounded-md" /></td>
+                        {Array.from({ length: 5 }).map((_, j) => (
+                          <td key={j} className="px-4 py-4"><div className="h-3 w-10 bg-slate-700 rounded" /></td>
+                        ))}
+                        <td className="px-4 py-4"><div className="h-7 w-12 bg-slate-700 rounded-md" /></td>
+                        <td className="px-4 py-4"><div className="h-7 w-14 bg-slate-700 rounded-md" /></td>
+                        <td className="px-4 py-4"><div className="h-7 w-14 bg-slate-700 rounded-md" /></td>
+                        <td className="px-4 py-4 text-right">
+                          <div className="flex justify-end gap-2">
+                            <div className="h-7 w-7 bg-slate-700 rounded-md" />
+                            <div className="h-7 w-7 bg-slate-700 rounded-md" />
+                            <div className="h-7 w-7 bg-slate-700 rounded-md" />
+                          </div>
+                        </td>
+                      </tr>
+                    ))
                   ) : rowData.length === 0 ? (
                     <tr>
                       <td colSpan={12} className="px-6 py-12 text-center text-slate-500">
@@ -1223,17 +1437,21 @@ export default function Home() {
                     </tr>
                   ) : (
                     rowData.map((item, rowIdx) => {
-                      const rsiColor = 
-                        item.rsi === null ? 'text-slate-400' :
-                        item.rsi > 70 ? 'text-rose-400' : 
-                        item.rsi < 30 ? 'text-emerald-400' : 
-                        'text-slate-300';
-                        
-                      const stochColor = 
-                        (item.stochK === null || item.stochD === null) ? 'text-slate-400' :
-                        item.stochK > 80 ? 'text-rose-400' :
-                        item.stochK < 20 ? 'text-emerald-400' :
-                        'text-slate-300';
+                      const rsiZone =
+                        item.rsi === null ? null :
+                        item.rsi > 70 ? 'overbought' :
+                        item.rsi < 30 ? 'oversold' : 'neutral';
+
+                      const stochZone =
+                        item.stochK === null || item.stochK === undefined ? null :
+                        item.stochK > 80 ? 'overbought' :
+                        item.stochK < 20 ? 'oversold' : 'neutral';
+
+                      const zoneBadge = (zone: 'oversold' | 'overbought' | 'neutral' | null) =>
+                        zone === 'oversold'   ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300' :
+                        zone === 'overbought' ? 'bg-rose-500/15 border border-rose-500/30 text-rose-300' :
+                        zone === 'neutral'    ? 'bg-slate-700/60 border border-slate-600/40 text-slate-300' :
+                                               'text-slate-500';
 
                       const isExpanded = expandedTicker === item.ticker;
 
@@ -1248,6 +1466,7 @@ export default function Home() {
                       return (
                         <Fragment key={item.ticker}>
                           <tr
+                            id={`row-${item.ticker}`}
                             draggable
                             onDragStart={() => handleTableDragStart(rowIdx)}
                             onDragOver={(e) => handleTableDragOver(e, rowIdx)}
@@ -1274,8 +1493,29 @@ export default function Home() {
                                 </div>
                               )}
                             </td>
-                            <td className="px-4 py-4 font-mono text-slate-300 text-sm">
-                              {item.price ? item.price.toLocaleString() : '-'}
+                            <td className="px-4 py-4">
+                              <div className="flex items-center gap-2">
+                                <Sparkline values={item.closes7d ?? []} />
+                                <span className="font-mono text-slate-300 text-sm tabular-nums">
+                                  {item.price ? item.price.toLocaleString() : '-'}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-4">
+                              {item.changePct != null && item.change != null ? (
+                                <div className={`inline-flex flex-col px-2 py-0.5 rounded-md font-mono text-xs tabular-nums font-bold ${
+                                  item.changePct > 0
+                                    ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
+                                    : item.changePct < 0
+                                    ? 'bg-rose-500/15 border border-rose-500/30 text-rose-300'
+                                    : 'bg-slate-700/60 border border-slate-600/40 text-slate-400'
+                                }`}>
+                                  <span>{item.changePct > 0 ? '+' : ''}{item.changePct.toFixed(2)}%</span>
+                                  <span className="text-[9px] font-normal opacity-75 leading-none mt-0.5">
+                                    {item.change > 0 ? '+' : ''}{item.change.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                  </span>
+                                </div>
+                              ) : <span className="text-slate-500 text-xs">-</span>}
                             </td>
                             <td className="px-4 py-4 font-mono text-slate-400 text-xs">
                               {item.pe ? item.pe.toFixed(2) : '-'}
@@ -1307,25 +1547,40 @@ export default function Home() {
                                 );
                               })()}
                             </td>
-                            <td className={`px-4 py-4 font-mono font-medium text-sm ${rsiColor}`}>
-                              {item.rsi !== null ? item.rsi.toFixed(2) : '-'}
-                            </td>
-                            <td className={`px-4 py-4 font-mono text-sm ${stochColor}`}>
-                              {item.stochK !== null && item.stochK !== undefined && item.stochD !== null && item.stochD !== undefined ? (
-                                <div className="flex flex-col">
-                                  <span>K: {item.stochK.toFixed(1)}</span>
-                                  <span className="text-[10px] opacity-70 text-slate-400">D: {item.stochD.toFixed(1)}</span>
+                            <td className="px-4 py-4">
+                              {item.rsi !== null ? (
+                                <div className={`inline-flex flex-col items-center px-2 py-0.5 rounded-md font-mono text-xs font-bold tabular-nums ${zoneBadge(rsiZone)}`}>
+                                  <span>{item.rsi.toFixed(1)}</span>
+                                  {rsiZone !== 'neutral' && (
+                                    <span className="text-[9px] font-normal opacity-80 leading-none mt-0.5">
+                                      {rsiZone === 'oversold' ? 'OVERSOLD' : 'OVERBOUGHT'}
+                                    </span>
+                                  )}
                                 </div>
-                              ) : '-'}
+                              ) : <span className="text-slate-500 text-xs">-</span>}
                             </td>
                             <td className="px-4 py-4">
-                              {item.macdHistogram !== null && item.macdHistogram !== undefined ? (
-                                <div className="flex items-center gap-2">
-                                  <span className={`font-mono text-xs ${item.macdHistogram > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                    {item.macdHistogram.toFixed(1)}
-                                  </span>
+                              {item.stochK !== null && item.stochK !== undefined && item.stochD !== null && item.stochD !== undefined ? (
+                                <div className={`inline-flex flex-col px-2 py-0.5 rounded-md font-mono text-xs tabular-nums ${zoneBadge(stochZone)}`}>
+                                  <span className="font-bold">K: {item.stochK.toFixed(1)}</span>
+                                  <span className="text-[9px] opacity-70 leading-none mt-0.5">D: {item.stochD.toFixed(1)}</span>
                                 </div>
-                              ) : '-'}
+                              ) : <span className="text-slate-500 text-xs">-</span>}
+                            </td>
+                            <td className="px-4 py-4">
+                              {item.macdHistogram !== null && item.macdHistogram !== undefined ? (() => {
+                                const pos = item.macdHistogram > 0;
+                                return (
+                                  <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-mono text-xs font-bold tabular-nums ${
+                                    pos
+                                      ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
+                                      : 'bg-rose-500/15 border border-rose-500/30 text-rose-300'
+                                  }`}>
+                                    <span>{pos ? '▲' : '▼'}</span>
+                                    <span>{item.macdHistogram.toFixed(1)}</span>
+                                  </div>
+                                );
+                              })() : <span className="text-slate-500 text-xs">-</span>}
                             </td>
                             <td className="px-4 py-4 text-right">
                               <div className="flex justify-end gap-2">

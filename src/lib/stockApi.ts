@@ -24,6 +24,11 @@ export interface StockIndicatorResult {
   bbUpper?: number | null;
   bbMiddle?: number | null;
   bbLower?: number | null;
+  // Last 7 daily closes for sparkline
+  closes7d?: number[];
+  // Day change
+  change?: number | null;
+  changePct?: number | null;
   error?: string;
 }
 
@@ -117,6 +122,9 @@ export async function fetchStockData(ticker: string): Promise<StockIndicatorResu
       bbUpper: lastBb?.upper ?? null,
       bbMiddle: lastBb?.middle ?? null,
       bbLower: lastBb?.lower ?? null,
+      closes7d: closePrices.slice(-7),
+      change: closePrices.length >= 2 ? closePrices[closePrices.length - 1] - closePrices[closePrices.length - 2] : null,
+      changePct: closePrices.length >= 2 ? ((closePrices[closePrices.length - 1] - closePrices[closePrices.length - 2]) / closePrices[closePrices.length - 2]) * 100 : null,
       pe,
       eps,
       beta,

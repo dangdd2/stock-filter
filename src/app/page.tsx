@@ -1032,7 +1032,7 @@ export default function Home() {
     const buy: Array<{ ticker: string; reasons: string[]; entry: number; target: number | null }> = [];
     const sell: Array<{ ticker: string; reasons: string[]; entry: number; target: number | null }> = [];
 
-    masterData.forEach(item => {
+    data.forEach(item => {
       if (item.error) return;
       const br: string[] = [];
       const sr: string[] = [];
@@ -1050,8 +1050,9 @@ export default function Home() {
       if (sr.length) sell.push({ ticker: item.ticker, reasons: sr, entry: item.price, target: item.bbMiddle ?? null });
     });
 
-    return { buySignals: buy, sellSignals: sell };
-  }, [masterData]);
+    const byConviction = (a: typeof buy[0], b: typeof buy[0]) => b.reasons.length - a.reasons.length;
+    return { buySignals: buy.sort(byConviction), sellSignals: sell.sort(byConviction) };
+  }, [data]);
 
   const toggleChart = (ticker: string) => {
     if (expandedTicker === ticker) {
@@ -1278,11 +1279,14 @@ export default function Home() {
         {/* ── Signals Summary Panel ── */}
         {(buySignals.length > 0 || sellSignals.length > 0 || masterLoading) && (
           <div className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 space-y-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Activity size={13} className="text-blue-400" />
               <span className="text-xs font-bold text-slate-200 uppercase tracking-widest">Khuyến Nghị Cổ Phiếu</span>
-              {masterLoading && <RefreshCw size={11} className="animate-spin text-slate-400 ml-1" />}
-              <span className="text-xs text-slate-500 ml-1">— All Tickers</span>
+              {loading && <RefreshCw size={11} className="animate-spin text-slate-400 ml-1" />}
+              <span className="text-xs text-slate-500">— {activeWatchlist?.name ?? 'All Tickers'}</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 border border-slate-600 text-slate-400 tracking-wide">
+                sorted by conviction
+              </span>
             </div>
 
             {buySignals.length > 0 && (
@@ -1291,34 +1295,46 @@ export default function Home() {
                   <TrendingUp size={13} /> MUA ({buySignals.length})
                 </span>
                 <div className="flex flex-wrap gap-2">
-                  {buySignals.map(({ ticker, reasons, entry, target }) => (
-                    <div
-                      key={ticker}
-                      onClick={() => handleSignalTickerClick(ticker)}
-                      className="flex flex-col px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-xs cursor-pointer hover:bg-emerald-500/20 hover:border-emerald-500/40 transition-colors"
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-emerald-300">{ticker}</span>
-                        <span className="text-emerald-500/70">{reasons.join(' · ')}</span>
-                      </div>
-                      <div className="flex items-center gap-1 mt-0.5 text-[10px] text-slate-400">
-                        {target != null ? (
-                          <>
+                  {buySignals.map(({ ticker, reasons, entry, target }) => {
+                    const score = reasons.length;
+                    const cardCls =
+                      score === 3 ? 'bg-emerald-500/25 border-emerald-500/50 ring-1 ring-emerald-500/30' :
+                      score === 2 ? 'bg-emerald-500/15 border-emerald-500/35' :
+                                   'bg-emerald-500/10 border-emerald-500/20';
+                    const chipCls =
+                      score === 3 ? 'bg-emerald-400/20 text-emerald-300 font-bold' :
+                      score === 2 ? 'bg-emerald-500/15 text-emerald-400' :
+                                   'bg-slate-700 text-emerald-600';
+                    return (
+                      <div
+                        key={ticker}
+                        onClick={() => handleSignalTickerClick(ticker)}
+                        className={`flex flex-col px-2.5 py-1.5 border rounded-lg text-xs cursor-pointer hover:brightness-110 transition-all ${cardCls}`}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-emerald-300">{ticker}</span>
+                          <span className="text-emerald-500/70">{reasons.join(' · ')}</span>
+                          <span className={`ml-auto text-[9px] px-1.5 py-0.5 rounded font-mono leading-none ${chipCls}`}>
+                            {score}/3
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 mt-1 text-[10px] text-slate-400">
+                          {target != null ? (
+                            <>
+                              <span className="text-emerald-400 font-medium">{entry.toLocaleString()}</span>
+                              <span className="text-slate-500">-</span>
+                              <span className="text-emerald-300 font-medium">{Math.round(target).toLocaleString()}</span>
+                              <span className="text-slate-500">(</span>
+                              <span className="text-emerald-300 font-semibold">+{(((target - entry) / entry) * 100).toFixed(1)}%</span>
+                              <span className="text-slate-500">)</span>
+                            </>
+                          ) : (
                             <span className="text-emerald-400 font-medium">{entry.toLocaleString()}</span>
-                            <span className="text-slate-500">-</span>
-                            <span className="text-emerald-300 font-medium">{Math.round(target).toLocaleString()}</span>
-                            <span className="text-slate-500">(</span>
-                            <span className="text-emerald-300 font-semibold">
-                              +{(((target - entry) / entry) * 100).toFixed(1)}%
-                            </span>
-                            <span className="text-slate-500">)</span>
-                          </>
-                        ) : (
-                          <span className="text-emerald-400 font-medium">{entry.toLocaleString()}</span>
-                        )}
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -1329,34 +1345,46 @@ export default function Home() {
                   <TrendingDown size={13} /> BÁN ({sellSignals.length})
                 </span>
                 <div className="flex flex-wrap gap-2">
-                  {sellSignals.map(({ ticker, reasons, entry, target }) => (
-                    <div
-                      key={ticker}
-                      onClick={() => handleSignalTickerClick(ticker)}
-                      className="flex flex-col px-2.5 py-1 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs cursor-pointer hover:bg-rose-500/20 hover:border-rose-500/40 transition-colors"
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-rose-300">{ticker}</span>
-                        <span className="text-rose-500/70">{reasons.join(' · ')}</span>
-                      </div>
-                      <div className="flex items-center gap-1 mt-0.5 text-[10px] text-slate-400">
-                        {target != null ? (
-                          <>
+                  {sellSignals.map(({ ticker, reasons, entry, target }) => {
+                    const score = reasons.length;
+                    const cardCls =
+                      score === 3 ? 'bg-rose-500/25 border-rose-500/50 ring-1 ring-rose-500/30' :
+                      score === 2 ? 'bg-rose-500/15 border-rose-500/35' :
+                                   'bg-rose-500/10 border-rose-500/20';
+                    const chipCls =
+                      score === 3 ? 'bg-rose-400/20 text-rose-300 font-bold' :
+                      score === 2 ? 'bg-rose-500/15 text-rose-400' :
+                                   'bg-slate-700 text-rose-600';
+                    return (
+                      <div
+                        key={ticker}
+                        onClick={() => handleSignalTickerClick(ticker)}
+                        className={`flex flex-col px-2.5 py-1.5 border rounded-lg text-xs cursor-pointer hover:brightness-110 transition-all ${cardCls}`}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-rose-300">{ticker}</span>
+                          <span className="text-rose-500/70">{reasons.join(' · ')}</span>
+                          <span className={`ml-auto text-[9px] px-1.5 py-0.5 rounded font-mono leading-none ${chipCls}`}>
+                            {score}/3
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 mt-1 text-[10px] text-slate-400">
+                          {target != null ? (
+                            <>
+                              <span className="text-rose-400 font-medium">{entry.toLocaleString()}</span>
+                              <span className="text-slate-500">-</span>
+                              <span className="text-rose-300 font-medium">{Math.round(target).toLocaleString()}</span>
+                              <span className="text-slate-500">(</span>
+                              <span className="text-rose-300 font-semibold">{(((target - entry) / entry) * 100).toFixed(1)}%</span>
+                              <span className="text-slate-500">)</span>
+                            </>
+                          ) : (
                             <span className="text-rose-400 font-medium">{entry.toLocaleString()}</span>
-                            <span className="text-slate-500">-</span>
-                            <span className="text-rose-300 font-medium">{Math.round(target).toLocaleString()}</span>
-                            <span className="text-slate-500">(</span>
-                            <span className="text-rose-300 font-semibold">
-                              {(((target - entry) / entry) * 100).toFixed(1)}%
-                            </span>
-                            <span className="text-slate-500">)</span>
-                          </>
-                        ) : (
-                          <span className="text-rose-400 font-medium">{entry.toLocaleString()}</span>
-                        )}
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

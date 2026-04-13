@@ -14,7 +14,8 @@
       "Skill(claude-api)",
       "Bash(ls C:WorkLabteststockvn-stock-filter.env*)",
       "Bash(npm run:*)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(find /c/Work/Lab/test/stock/vn-stock-filter/src -type f \\\\\\( -name \"*.tsx\" -o -name \"*.ts\" \\\\\\) ! -path \"*/node_modules/*\" ! -path \"*/.next/*\" -exec wc -l {} +)"
     ]
   }
 }

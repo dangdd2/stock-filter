@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, Fragment, useCallback, useRef } from 'react';
 import { format } from 'date-fns';
-import { Activity, TrendingUp, TrendingDown, Filter, AlertCircle, RefreshCw, BarChart2, X, Plus, Trash2, Save, MoreVertical, Brain, GripVertical, Settings2 } from 'lucide-react';
+import { Activity, TrendingUp, TrendingDown, Filter, AlertCircle, RefreshCw, BarChart2, X, Plus, Trash2, Save, MoreVertical, Brain, GripVertical, Settings2, EyeOff } from 'lucide-react';
 
 export interface Watchlist {
   id: string;
@@ -750,6 +750,9 @@ export default function Home() {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
+  // Ignored tickers in the signal/recommend section
+  const [ignoredSignalTickers, setIgnoredSignalTickers] = useState<string[]>([]);
+
   // Master watchlist signal data (always tracks All Tickers)
   const [masterData, setMasterData] = useState<StockIndicatorResult[]>([]);
   const [masterLoading, setMasterLoading] = useState(false);
@@ -777,7 +780,16 @@ export default function Home() {
     }
     setWatchlists(lists);
     setActiveWatchlistId(lists[0].id);
+
+    const savedIgnored = localStorage.getItem('vn_stock_ignored_signals');
+    if (savedIgnored) {
+      try { setIgnoredSignalTickers(JSON.parse(savedIgnored)); } catch { /* ignore */ }
+    }
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem('vn_stock_ignored_signals', JSON.stringify(ignoredSignalTickers));
+  }, [ignoredSignalTickers]);
 
   const activeWatchlist = useMemo(() =>
     watchlists.find(w => w.id === activeWatchlistId)
@@ -1034,6 +1046,7 @@ export default function Home() {
 
     data.forEach(item => {
       if (item.error) return;
+      if (ignoredSignalTickers.includes(item.ticker)) return;
       const br: string[] = [];
       const sr: string[] = [];
 
@@ -1052,7 +1065,7 @@ export default function Home() {
 
     const byConviction = (a: typeof buy[0], b: typeof buy[0]) => b.reasons.length - a.reasons.length;
     return { buySignals: buy.sort(byConviction), sellSignals: sell.sort(byConviction) };
-  }, [data]);
+  }, [data, ignoredSignalTickers]);
 
   const toggleChart = (ticker: string) => {
     if (expandedTicker === ticker) {
@@ -1309,14 +1322,21 @@ export default function Home() {
                       <div
                         key={ticker}
                         onClick={() => handleSignalTickerClick(ticker)}
-                        className={`flex flex-col px-2.5 py-1.5 border rounded-lg text-xs cursor-pointer hover:brightness-110 transition-all ${cardCls}`}
+                        className={`relative flex flex-col px-2.5 py-1.5 border rounded-lg text-xs cursor-pointer hover:brightness-110 transition-all group ${cardCls}`}
                       >
                         <div className="flex items-center gap-1.5">
                           <span className="font-bold text-emerald-300">{ticker}</span>
                           <span className="text-emerald-500/70">{reasons.join(' · ')}</span>
-                          <span className={`ml-auto text-[9px] px-1.5 py-0.5 rounded font-mono leading-none ${chipCls}`}>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono leading-none ${chipCls}`}>
                             {score}/3
                           </span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setIgnoredSignalTickers(prev => [...prev, ticker]); }}
+                            className="ml-auto p-0.5 text-slate-600 hover:text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Ignore this ticker"
+                          >
+                            <EyeOff size={11} />
+                          </button>
                         </div>
                         <div className="flex items-center gap-1 mt-1 text-[10px] text-slate-400">
                           {target != null ? (
@@ -1359,14 +1379,21 @@ export default function Home() {
                       <div
                         key={ticker}
                         onClick={() => handleSignalTickerClick(ticker)}
-                        className={`flex flex-col px-2.5 py-1.5 border rounded-lg text-xs cursor-pointer hover:brightness-110 transition-all ${cardCls}`}
+                        className={`relative flex flex-col px-2.5 py-1.5 border rounded-lg text-xs cursor-pointer hover:brightness-110 transition-all group ${cardCls}`}
                       >
                         <div className="flex items-center gap-1.5">
                           <span className="font-bold text-rose-300">{ticker}</span>
                           <span className="text-rose-500/70">{reasons.join(' · ')}</span>
-                          <span className={`ml-auto text-[9px] px-1.5 py-0.5 rounded font-mono leading-none ${chipCls}`}>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono leading-none ${chipCls}`}>
                             {score}/3
                           </span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setIgnoredSignalTickers(prev => [...prev, ticker]); }}
+                            className="ml-auto p-0.5 text-slate-600 hover:text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Ignore this ticker"
+                          >
+                            <EyeOff size={11} />
+                          </button>
                         </div>
                         <div className="flex items-center gap-1 mt-1 text-[10px] text-slate-400">
                           {target != null ? (

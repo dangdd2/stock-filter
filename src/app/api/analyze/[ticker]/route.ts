@@ -140,7 +140,7 @@ Dựa trên các chỉ báo kỹ thuật này, hãy cung cấp phân tích và k
     async start(controller) {
       try {
         const stream = await client.chat.completions.create({
-          model: 'moonshotai/kimi-k2-instruct',
+          model: 'openai/gpt-oss-120b', //'moonshotai/kimi-k2-instruct',
           messages: [
             { role: 'system', content: SYSTEM_PROMPT },
             { role: 'user', content: userMessage },

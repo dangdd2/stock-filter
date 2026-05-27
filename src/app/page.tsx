@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useMemo, Fragment, useCallback, useRef } from 'react';
 import { format } from 'date-fns';
-import { Activity, TrendingUp, TrendingDown, Filter, AlertCircle, RefreshCw, BarChart2, X, Plus, Trash2, Save, MoreVertical, Brain, GripVertical, Settings2, EyeOff, History } from 'lucide-react';
+import { Activity, TrendingUp, TrendingDown, Filter, AlertCircle, RefreshCw, BarChart2, X, Plus, Trash2, Save, MoreVertical, Brain, GripVertical, Settings2, EyeOff, History, Map as MapIcon } from 'lucide-react';
 import SignalHistoryPanel from '@/components/SignalHistoryPanel';
+import MarketHeatmap from '@/components/MarketHeatmap';
 import {
   loadSignalHistory,
   saveSignalHistory,
@@ -769,7 +770,7 @@ export default function Home() {
 
   // Signal history & backtesting
   const [signalHistory, setSignalHistory] = useState<SignalLog[]>([]);
-  const [activeTab, setActiveTab] = useState<'watchlist' | 'history'>('watchlist');
+  const [activeTab, setActiveTab] = useState<'watchlist' | 'history' | 'heatmap'>('watchlist');
 
   // Initial load from localStorage
   useEffect(() => {
@@ -830,7 +831,8 @@ export default function Home() {
 
       // ── Signal History: log new signals + fill pending prices ──
       const today = new Date().toISOString().split('T')[0];
-      const priceMap = new Map(json.filter(d => !d.error).map(d => [d.ticker, d.price]));
+      const priceEntries: [string, number][] = json.filter(d => !d.error).map(d => [d.ticker, d.price]);
+      const priceMap = new Map(priceEntries) as Map<string, number>;
 
       setSignalHistory(prev => {
         // 1. Fill pending price checkpoints for already-logged signals
@@ -1232,6 +1234,12 @@ export default function Home() {
               </span>
             )}
           </button>
+          <button
+            onClick={() => setActiveTab('heatmap')}
+            className={`flex items-center gap-2 px-4 py-2 transition-colors ${activeTab === 'heatmap' ? 'bg-emerald-500/20 text-emerald-300 font-semibold' : 'text-slate-400 hover:bg-slate-700'}`}
+          >
+            <MapIcon size={14} /> Heatmap
+          </button>
         </div>
       </header>
 
@@ -1244,6 +1252,17 @@ export default function Home() {
             onClear={() => {
               clearSignalHistory();
               setSignalHistory([]);
+            }}
+          />
+        )}
+
+        {/* ── Market Heatmap Tab ── */}
+        {activeTab === 'heatmap' && (
+          <MarketHeatmap
+            data={masterData.length > 0 ? masterData : data}
+            onTickerClick={(ticker) => {
+              setActiveTab('watchlist');
+              handleSignalTickerClick(ticker);
             }}
           />
         )}

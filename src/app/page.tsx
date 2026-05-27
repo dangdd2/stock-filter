@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import { Activity, TrendingUp, TrendingDown, Filter, AlertCircle, RefreshCw, BarChart2, X, Plus, Trash2, Save, MoreVertical, Brain, GripVertical, Settings2, EyeOff, History, Map as MapIcon } from 'lucide-react';
 import SignalHistoryPanel from '@/components/SignalHistoryPanel';
 import MarketHeatmap from '@/components/MarketHeatmap';
+import MarketStatusBar from '@/components/MarketStatusBar';
 import {
   loadSignalHistory,
   saveSignalHistory,
@@ -772,6 +773,9 @@ export default function Home() {
   const [signalHistory, setSignalHistory] = useState<SignalLog[]>([]);
   const [activeTab, setActiveTab] = useState<'watchlist' | 'history' | 'heatmap'>('watchlist');
 
+  // Last successful data fetch timestamp
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
   // Initial load from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('vn_stock_watchlists');
@@ -828,6 +832,7 @@ export default function Home() {
       if (!res.ok) throw new Error('Failed to fetch data');
       const json: StockIndicatorResult[] = await res.json();
       setData(json);
+      setLastUpdated(new Date());
 
       // ── Signal History: log new signals + fill pending prices ──
       const today = new Date().toISOString().split('T')[0];
@@ -1245,6 +1250,13 @@ export default function Home() {
 
       <main className="w-full px-4 py-4 space-y-3">
 
+        {/* ── Market Status + Auto-Refresh Bar ── */}
+        <MarketStatusBar
+          loading={loading}
+          lastUpdated={lastUpdated}
+          onRefresh={fetchData}
+        />
+
         {/* ── Signal History Tab ── */}
         {activeTab === 'history' && (
           <SignalHistoryPanel
@@ -1375,19 +1387,11 @@ export default function Home() {
             </select>
           </div>
 
-          {/* Summary + Refresh pushed to the right */}
+          {/* Summary ticker count pushed to the right */}
           <div className="ml-auto flex items-center gap-3">
             <span className="text-xs text-slate-400">
               <span className="font-bold text-slate-200">{filteredData.length}</span> / {activeWatchlist?.tickers.length || 0} tickers
             </span>
-            <button
-              onClick={fetchData}
-              disabled={loading || !activeWatchlist || activeWatchlist.tickers.length === 0}
-              className="flex items-center gap-2 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md text-sm transition-colors disabled:opacity-50"
-            >
-              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-              Refresh
-            </button>
           </div>
         </div>
 

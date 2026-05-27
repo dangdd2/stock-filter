@@ -1260,6 +1260,7 @@ export default function Home() {
         {activeTab === 'heatmap' && (
           <MarketHeatmap
             data={masterData.length > 0 ? masterData : data}
+            watchlists={watchlists}
             onTickerClick={(ticker) => {
               setActiveTab('watchlist');
               handleSignalTickerClick(ticker);

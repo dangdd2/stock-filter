@@ -2,7 +2,17 @@
 
 import { useEffect, useState, useMemo, Fragment, useCallback, useRef } from 'react';
 import { format } from 'date-fns';
-import { Activity, TrendingUp, TrendingDown, Filter, AlertCircle, RefreshCw, BarChart2, X, Plus, Trash2, Save, MoreVertical, Brain, GripVertical, Settings2, EyeOff } from 'lucide-react';
+import { Activity, TrendingUp, TrendingDown, Filter, AlertCircle, RefreshCw, BarChart2, X, Plus, Trash2, Save, MoreVertical, Brain, GripVertical, Settings2, EyeOff, History } from 'lucide-react';
+import SignalHistoryPanel from '@/components/SignalHistoryPanel';
+import {
+  loadSignalHistory,
+  saveSignalHistory,
+  clearSignalHistory,
+  addNewSignals,
+  fillSignalPrices,
+  type SignalLog,
+  type SignalInput,
+} from '@/lib/signalHistory';
 
 export interface Watchlist {
   id: string;
@@ -757,6 +767,10 @@ export default function Home() {
   const [masterData, setMasterData] = useState<StockIndicatorResult[]>([]);
   const [masterLoading, setMasterLoading] = useState(false);
 
+  // Signal history & backtesting
+  const [signalHistory, setSignalHistory] = useState<SignalLog[]>([]);
+  const [activeTab, setActiveTab] = useState<'watchlist' | 'history'>('watchlist');
+
   // Initial load from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('vn_stock_watchlists');
@@ -785,6 +799,9 @@ export default function Home() {
     if (savedIgnored) {
       try { setIgnoredSignalTickers(JSON.parse(savedIgnored)); } catch { /* ignore */ }
     }
+
+    // Load signal history
+    setSignalHistory(loadSignalHistory());
   }, []);
 
   useEffect(() => {
@@ -808,8 +825,40 @@ export default function Home() {
     try {
       const res = await fetch(`/api/stocks?tickers=${activeWatchlist.tickers.join(',')}`);
       if (!res.ok) throw new Error('Failed to fetch data');
-      const json = await res.json();
+      const json: StockIndicatorResult[] = await res.json();
       setData(json);
+
+      // ── Signal History: log new signals + fill pending prices ──
+      const today = new Date().toISOString().split('T')[0];
+      const priceMap = new Map(json.filter(d => !d.error).map(d => [d.ticker, d.price]));
+
+      setSignalHistory(prev => {
+        // 1. Fill pending price checkpoints for already-logged signals
+        let updated = fillSignalPrices(prev, priceMap);
+
+        // 2. Collect today's new signals from fresh data
+        const newInputs: SignalInput[] = [];
+        json.forEach(item => {
+          if (item.error) return;
+          const buyReasons: string[] = [];
+          const sellReasons: string[] = [];
+          if (item.rsi !== null && item.rsi < 30) buyReasons.push(`RSI ${item.rsi.toFixed(0)}`);
+          if (item.rsi !== null && item.rsi > 70) sellReasons.push(`RSI ${item.rsi.toFixed(0)}`);
+          if (item.stochK !== null && item.stochK < 20) buyReasons.push(`Stoch ${item.stochK.toFixed(0)}`);
+          if (item.stochK !== null && item.stochK > 80) sellReasons.push(`Stoch ${item.stochK.toFixed(0)}`);
+          if (item.bbLower != null && item.price < item.bbLower) buyReasons.push('BB↓');
+          if (item.bbUpper != null && item.price > item.bbUpper) sellReasons.push('BB↑');
+          if (buyReasons.length)
+            newInputs.push({ ticker: item.ticker, direction: 'BUY', reasons: buyReasons, entry: item.price, target: item.bbMiddle ?? null });
+          if (sellReasons.length)
+            newInputs.push({ ticker: item.ticker, direction: 'SELL', reasons: sellReasons, entry: item.price, target: item.bbMiddle ?? null });
+        });
+
+        // 3. Merge (deduplication by ticker+direction+day is inside addNewSignals)
+        updated = addNewSignals(updated, newInputs, today);
+        saveSignalHistory(updated);
+        return updated;
+      });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -1164,10 +1213,43 @@ export default function Home() {
             <p className="text-xs text-slate-400">Custom Watchlists & Technical Indicators</p>
           </div>
         </div>
-        <div />
+        {/* Tab navigation */}
+        <div className="flex rounded-lg overflow-hidden border border-slate-700 text-sm">
+          <button
+            onClick={() => setActiveTab('watchlist')}
+            className={`flex items-center gap-2 px-4 py-2 transition-colors ${activeTab === 'watchlist' ? 'bg-blue-500/20 text-blue-300 font-semibold' : 'text-slate-400 hover:bg-slate-700'}`}
+          >
+            <BarChart2 size={14} /> Watchlist
+          </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`flex items-center gap-2 px-4 py-2 transition-colors relative ${activeTab === 'history' ? 'bg-violet-500/20 text-violet-300 font-semibold' : 'text-slate-400 hover:bg-slate-700'}`}
+          >
+            <History size={14} /> Lịch Sử
+            {signalHistory.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 bg-violet-500/30 text-violet-300 rounded-full text-[10px] font-bold leading-none">
+                {signalHistory.length}
+              </span>
+            )}
+          </button>
+        </div>
       </header>
 
       <main className="w-full px-4 py-4 space-y-3">
+
+        {/* ── Signal History Tab ── */}
+        {activeTab === 'history' && (
+          <SignalHistoryPanel
+            logs={signalHistory}
+            onClear={() => {
+              clearSignalHistory();
+              setSignalHistory([]);
+            }}
+          />
+        )}
+
+        {/* ── Watchlist Tab ── */}
+        {activeTab === 'watchlist' && <>
         {/* ── Top Control Bar ── */}
         <div className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 flex flex-wrap items-center gap-3">
 
@@ -1705,6 +1787,7 @@ export default function Home() {
             </div>
           </div>
         </section>
+        </> /* end activeTab === 'watchlist' */}
       </main>
 
       {/* Manage Watchlists Modal */}

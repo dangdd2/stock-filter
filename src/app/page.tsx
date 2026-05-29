@@ -2,10 +2,11 @@
 
 import { useEffect, useState, useMemo, Fragment, useCallback, useRef } from 'react';
 import { format } from 'date-fns';
-import { Activity, TrendingUp, TrendingDown, Filter, AlertCircle, RefreshCw, BarChart2, X, Plus, Trash2, Save, MoreVertical, Brain, GripVertical, Settings2, EyeOff, History, Map as MapIcon } from 'lucide-react';
+import { Activity, TrendingUp, TrendingDown, Filter, AlertCircle, RefreshCw, BarChart2, X, Plus, Trash2, Save, MoreVertical, Brain, GripVertical, Settings2, EyeOff, History, Map as MapIcon, SlidersHorizontal } from 'lucide-react';
 import SignalHistoryPanel from '@/components/SignalHistoryPanel';
 import MarketHeatmap from '@/components/MarketHeatmap';
 import MarketStatusBar from '@/components/MarketStatusBar';
+import AdvancedScreener from '@/components/AdvancedScreener';
 import {
   loadSignalHistory,
   saveSignalHistory,
@@ -45,6 +46,19 @@ export interface StockIndicatorResult {
   closes7d?: number[];
   change?: number | null;
   changePct?: number | null;
+  // Price stats
+  change1w?: number | null;
+  change1m?: number | null;
+  change3m?: number | null;
+  change6m?: number | null;
+  high52w?: number | null;
+  low52w?: number | null;
+  distFromHigh?: number | null;
+  distFromLow?: number | null;
+  consecutiveUp?: number | null;
+  consecutiveDown?: number | null;
+  avgVolume20d?: number | null;
+  relVolume?: number | null;
   error?: string;
 }
 
@@ -771,7 +785,7 @@ export default function Home() {
 
   // Signal history & backtesting
   const [signalHistory, setSignalHistory] = useState<SignalLog[]>([]);
-  const [activeTab, setActiveTab] = useState<'watchlist' | 'history' | 'heatmap'>('watchlist');
+  const [activeTab, setActiveTab] = useState<'watchlist' | 'history' | 'heatmap' | 'screener'>('watchlist');
 
   // Last successful data fetch timestamp
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -1245,6 +1259,12 @@ export default function Home() {
           >
             <MapIcon size={14} /> Heatmap
           </button>
+          <button
+            onClick={() => setActiveTab('screener')}
+            className={`flex items-center gap-2 px-4 py-2 transition-colors ${activeTab === 'screener' ? 'bg-amber-500/20 text-amber-300 font-semibold' : 'text-slate-400 hover:bg-slate-700'}`}
+          >
+            <SlidersHorizontal size={14} /> Screener
+          </button>
         </div>
       </header>
 
@@ -1273,6 +1293,17 @@ export default function Home() {
           <MarketHeatmap
             data={masterData.length > 0 ? masterData : data}
             watchlists={watchlists}
+            onTickerClick={(ticker) => {
+              setActiveTab('watchlist');
+              handleSignalTickerClick(ticker);
+            }}
+          />
+        )}
+
+        {/* ── Advanced Screener Tab ── */}
+        {activeTab === 'screener' && (
+          <AdvancedScreener
+            data={masterData.length > 0 ? masterData : data}
             onTickerClick={(ticker) => {
               setActiveTab('watchlist');
               handleSignalTickerClick(ticker);

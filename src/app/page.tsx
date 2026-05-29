@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useMemo, Fragment, useCallback, useRef } from 'react';
 import { format } from 'date-fns';
-import { Activity, TrendingUp, TrendingDown, Filter, AlertCircle, RefreshCw, BarChart2, X, Plus, Trash2, Save, MoreVertical, Brain, GripVertical, Settings2, EyeOff, History, Map as MapIcon, SlidersHorizontal } from 'lucide-react';
+import Link from 'next/link';
+import { Activity, TrendingUp, TrendingDown, Filter, AlertCircle, RefreshCw, BarChart2, X, Plus, Trash2, Save, MoreVertical, Brain, GripVertical, Settings2, EyeOff, History, Map as MapIcon, SlidersHorizontal, HelpCircle } from 'lucide-react';
 import SignalHistoryPanel from '@/components/SignalHistoryPanel';
 import MarketHeatmap from '@/components/MarketHeatmap';
 import MarketStatusBar from '@/components/MarketStatusBar';
@@ -1266,6 +1267,12 @@ export default function Home() {
             <SlidersHorizontal size={14} /> Screener
           </button>
         </div>
+        <Link
+          href="/guide"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded-lg transition-colors border border-transparent hover:border-slate-600"
+        >
+          <HelpCircle size={14} /> Hướng dẫn
+        </Link>
       </header>
 
       <main className="w-full px-4 py-4 space-y-3">

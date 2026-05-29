@@ -51,14 +51,20 @@ function ConditionRow({
       )}
       {index === 0 && <span className="text-[10px] text-slate-500 w-10 text-center">KHI</span>}
 
-      {/* Field selector */}
+      {/* Field selector — grouped by category */}
       <select
         value={cond.field}
         onChange={e => onChange({ ...cond, field: e.target.value as FieldKey })}
         className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
       >
-        {(Object.entries(FIELD_META) as [FieldKey, typeof FIELD_META[FieldKey]][]).map(([k, m]) => (
-          <option key={k} value={k}>{m.label}{m.unit ? ` (${m.unit})` : ''}</option>
+        {(['Kỹ thuật', 'Thống kê giá', 'Cơ bản'] as const).map(group => (
+          <optgroup key={group} label={group}>
+            {(Object.entries(FIELD_META) as [FieldKey, typeof FIELD_META[FieldKey]][])
+              .filter(([, m]) => m.group === group)
+              .map(([k, m]) => (
+                <option key={k} value={k}>{m.label}{m.unit ? ` (${m.unit})` : ''}</option>
+              ))}
+          </optgroup>
         ))}
       </select>
 
@@ -353,13 +359,16 @@ export default function AdvancedScreener({ data, onTickerClick }: Props) {
                     {[
                       { k: 'ticker',        label: 'Ticker' },
                       { k: 'price',         label: 'Giá' },
-                      { k: 'changePct',     label: '% Ngày' },
+                      { k: 'changePct',     label: '% Hôm nay' },
+                      { k: 'change1w',      label: '1 Tuần' },
+                      { k: 'change1m',      label: '1 Tháng' },
                       { k: 'rsi',           label: 'RSI' },
                       { k: 'stochK',        label: 'Stoch K' },
                       { k: 'macdHistogram', label: 'MACD Hist' },
                       { k: 'bbPct',         label: 'BB %B', noSort: true },
+                      { k: 'relVolume',     label: 'Rel Vol' },
+                      { k: 'consecutiveUp', label: '↑ Liên tiếp' },
                       { k: 'pe',            label: 'P/E' },
-                      { k: 'volume',        label: 'Volume' },
                     ].map(({ k, label, noSort }) => (
                       <th key={k}
                         onClick={() => !noSort && toggleSort(k as keyof StockIndicatorResult)}
@@ -395,6 +404,15 @@ export default function AdvancedScreener({ data, onTickerClick }: Props) {
                             </span>
                           ) : <span className="text-slate-600">—</span>}
                         </td>
+                        {[item.change1w, item.change1m].map((val, i) => (
+                          <td key={i} className="px-3 py-2.5 font-mono font-semibold">
+                            {val != null ? (
+                              <span className={val > 0 ? 'text-emerald-400' : val < 0 ? 'text-rose-400' : 'text-slate-400'}>
+                                {val > 0 ? '+' : ''}{val.toFixed(1)}%
+                              </span>
+                            ) : <span className="text-slate-600">—</span>}
+                          </td>
+                        ))}
                         <td className={`px-3 py-2.5 font-mono ${rsiColor}`}>
                           {item.rsi?.toFixed(1) ?? '—'}
                         </td>
@@ -407,11 +425,18 @@ export default function AdvancedScreener({ data, onTickerClick }: Props) {
                         <td className={`px-3 py-2.5 font-mono ${bbPct == null ? 'text-slate-600' : bbPct > 100 ? 'text-rose-400' : bbPct < 0 ? 'text-emerald-400' : 'text-slate-300'}`}>
                           {bbPct != null ? `${bbPct.toFixed(0)}%` : '—'}
                         </td>
-                        <td className="px-3 py-2.5 font-mono text-slate-400">
-                          {item.pe?.toFixed(1) ?? '—'}
+                        <td className={`px-3 py-2.5 font-mono ${(item.relVolume ?? 0) > 2 ? 'text-amber-400' : (item.relVolume ?? 0) > 1 ? 'text-slate-300' : 'text-slate-500'}`}>
+                          {item.relVolume != null ? `${item.relVolume.toFixed(1)}x` : '—'}
+                        </td>
+                        <td className="px-3 py-2.5 font-mono text-slate-400 text-center">
+                          {(item.consecutiveUp ?? 0) > 0
+                            ? <span className="text-emerald-400">↑{item.consecutiveUp}</span>
+                            : (item.consecutiveDown ?? 0) > 0
+                            ? <span className="text-rose-400">↓{item.consecutiveDown}</span>
+                            : <span className="text-slate-600">—</span>}
                         </td>
                         <td className="px-3 py-2.5 font-mono text-slate-400">
-                          {item.volume >= 1e6 ? `${(item.volume / 1e6).toFixed(2)}M` : item.volume >= 1e3 ? `${(item.volume / 1e3).toFixed(0)}K` : item.volume}
+                          {item.pe?.toFixed(1) ?? '—'}
                         </td>
                         <td className="px-3 py-2.5">
                           <div className="flex gap-0.5" title={`${conditions.length} điều kiện khớp`}>

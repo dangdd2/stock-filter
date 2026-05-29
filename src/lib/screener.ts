@@ -11,7 +11,12 @@ export type FieldKey =
   | 'rsi' | 'stochK' | 'stochD'
   | 'macd' | 'macdHistogram'
   | 'bbPct'          // (price - bbLower) / (bbUpper - bbLower) * 100
-  | 'pe' | 'eps' | 'beta' | 'marketCapB'; // marketCap in billions
+  | 'pe' | 'eps' | 'beta' | 'marketCapB'
+  // Price stats
+  | 'change1w' | 'change1m' | 'change3m' | 'change6m'
+  | 'distFromHigh' | 'distFromLow'
+  | 'consecutiveUp' | 'consecutiveDown'
+  | 'relVolume' | 'avgVolume20dK';
 
 export interface FieldMeta {
   label: string;
@@ -20,22 +25,36 @@ export interface FieldMeta {
   max: number;
   step: number;
   decimals: number;
+  group: string;
 }
 
 export const FIELD_META: Record<FieldKey, FieldMeta> = {
-  price:       { label: 'Giá',           unit: 'VND',  min: 0,    max: 200000, step: 500,  decimals: 0  },
-  changePct:   { label: '% Thay đổi',    unit: '%',    min: -20,  max: 20,     step: 0.5,  decimals: 1  },
-  volume:      { label: 'Volume',        unit: 'K',    min: 0,    max: 50000,  step: 100,  decimals: 0  },
-  rsi:         { label: 'RSI (14)',       unit: '',     min: 0,    max: 100,    step: 1,    decimals: 0  },
-  stochK:      { label: 'Stoch %K',      unit: '',     min: 0,    max: 100,    step: 1,    decimals: 0  },
-  stochD:      { label: 'Stoch %D',      unit: '',     min: 0,    max: 100,    step: 1,    decimals: 0  },
-  macd:        { label: 'MACD',          unit: '',     min: -500, max: 500,    step: 1,    decimals: 2  },
-  macdHistogram:{ label: 'MACD Hist',    unit: '',     min: -500, max: 500,    step: 1,    decimals: 2  },
-  bbPct:       { label: 'BB %B',         unit: '%',    min: -50,  max: 150,    step: 5,    decimals: 0  },
-  pe:          { label: 'P/E',           unit: 'x',    min: 0,    max: 100,    step: 1,    decimals: 1  },
-  eps:         { label: 'EPS',           unit: 'VND',  min: -5000,max: 20000,  step: 100,  decimals: 0  },
-  beta:        { label: 'Beta',          unit: '',     min: -2,   max: 5,      step: 0.1,  decimals: 1  },
-  marketCapB:  { label: 'Vốn hoá',       unit: 'tỷ',   min: 0,    max: 500000, step: 1000, decimals: 0  },
+  // ── Kỹ thuật ──────────────────────────────────────────────
+  price:        { label: 'Giá hiện tại',    unit: 'VND', min: 0,    max: 200000, step: 500,  decimals: 0, group: 'Kỹ thuật' },
+  changePct:    { label: '% Thay đổi hôm nay', unit: '%', min: -20, max: 20,    step: 0.5,  decimals: 1, group: 'Kỹ thuật' },
+  volume:       { label: 'Volume',          unit: 'K',   min: 0,    max: 50000,  step: 100,  decimals: 0, group: 'Kỹ thuật' },
+  rsi:          { label: 'RSI (14)',         unit: '',    min: 0,    max: 100,    step: 1,    decimals: 0, group: 'Kỹ thuật' },
+  stochK:       { label: 'Stoch %K',        unit: '',    min: 0,    max: 100,    step: 1,    decimals: 0, group: 'Kỹ thuật' },
+  stochD:       { label: 'Stoch %D',        unit: '',    min: 0,    max: 100,    step: 1,    decimals: 0, group: 'Kỹ thuật' },
+  macd:         { label: 'MACD',            unit: '',    min: -500, max: 500,    step: 1,    decimals: 2, group: 'Kỹ thuật' },
+  macdHistogram:{ label: 'MACD Histogram',  unit: '',    min: -500, max: 500,    step: 1,    decimals: 2, group: 'Kỹ thuật' },
+  bbPct:        { label: 'BB %B',           unit: '%',   min: -50,  max: 150,    step: 5,    decimals: 0, group: 'Kỹ thuật' },
+  // ── Thống kê giá ──────────────────────────────────────────
+  change1w:     { label: 'Thay đổi 1 tuần', unit: '%',   min: -50,  max: 50,     step: 1,    decimals: 1, group: 'Thống kê giá' },
+  change1m:     { label: 'Thay đổi 1 tháng',unit: '%',   min: -80,  max: 80,     step: 1,    decimals: 1, group: 'Thống kê giá' },
+  change3m:     { label: 'Thay đổi 3 tháng',unit: '%',   min: -80,  max: 100,    step: 5,    decimals: 1, group: 'Thống kê giá' },
+  change6m:     { label: 'Thay đổi 6 tháng',unit: '%',   min: -80,  max: 200,    step: 5,    decimals: 1, group: 'Thống kê giá' },
+  distFromHigh: { label: '% dưới đỉnh 6T',  unit: '%',   min: -100, max: 0,      step: 1,    decimals: 1, group: 'Thống kê giá' },
+  distFromLow:  { label: '% trên đáy 6T',   unit: '%',   min: 0,    max: 300,    step: 5,    decimals: 1, group: 'Thống kê giá' },
+  consecutiveUp:  { label: 'Phiên tăng liên tiếp', unit: 'phiên', min: 0, max: 20, step: 1, decimals: 0, group: 'Thống kê giá' },
+  consecutiveDown:{ label: 'Phiên giảm liên tiếp', unit: 'phiên', min: 0, max: 20, step: 1, decimals: 0, group: 'Thống kê giá' },
+  relVolume:    { label: 'Volume tương đối', unit: 'x',   min: 0,    max: 10,     step: 0.5,  decimals: 1, group: 'Thống kê giá' },
+  avgVolume20dK:{ label: 'Volume TB 20 ngày',unit: 'K',   min: 0,    max: 50000,  step: 100,  decimals: 0, group: 'Thống kê giá' },
+  // ── Cơ bản ────────────────────────────────────────────────
+  pe:           { label: 'P/E',             unit: 'x',   min: 0,    max: 100,    step: 1,    decimals: 1, group: 'Cơ bản' },
+  eps:          { label: 'EPS',             unit: 'VND', min: -5000,max: 20000,  step: 100,  decimals: 0, group: 'Cơ bản' },
+  beta:         { label: 'Beta',            unit: '',    min: -2,   max: 5,      step: 0.1,  decimals: 1, group: 'Cơ bản' },
+  marketCapB:   { label: 'Vốn hoá',         unit: 'tỷ',  min: 0,    max: 500000, step: 1000, decimals: 0, group: 'Cơ bản' },
 };
 
 export type Operator = '<' | '<=' | '>' | '>=' | '==' | 'between';
@@ -115,16 +134,49 @@ export const BUILT_IN_PRESETS: Preset[] = [
     conditions: [
       { field: 'bbPct',         op: 'between', value: 75, value2: 100, logic: 'AND' },
       { field: 'macdHistogram', op: '>',        value: 0,              logic: 'AND' },
+      { field: 'relVolume',     op: '>',        value: 1.5,            logic: 'AND' },
     ],
   },
   {
     id: 'high_volume_move',
     name: 'Volume Đột Biến',
     emoji: '📊',
-    desc: 'Volume lớn kèm giá tăng — có dòng tiền vào',
+    desc: 'Volume tương đối > 2x + giá tăng — có dòng tiền vào mạnh',
     conditions: [
-      { field: 'volume',    op: '>',  value: 1000, logic: 'AND' },
-      { field: 'changePct', op: '>',  value: 1,    logic: 'AND' },
+      { field: 'relVolume', op: '>',  value: 2,  logic: 'AND' },
+      { field: 'changePct', op: '>',  value: 1,  logic: 'AND' },
+    ],
+  },
+  {
+    id: 'near_6m_low',
+    name: 'Gần Đáy 6 Tháng',
+    emoji: '🎯',
+    desc: 'Giá gần đáy 6 tháng + RSI thấp — vùng tích lũy tiềm năng',
+    conditions: [
+      { field: 'distFromLow', op: '<',  value: 10, logic: 'AND' },
+      { field: 'rsi',         op: '<',  value: 45, logic: 'AND' },
+    ],
+  },
+  {
+    id: 'strong_uptrend',
+    name: 'Uptrend Mạnh',
+    emoji: '🏆',
+    desc: 'Tăng liên tiếp 3+ phiên + 1 tháng dương + momentum tốt',
+    conditions: [
+      { field: 'consecutiveUp', op: '>=', value: 3,  logic: 'AND' },
+      { field: 'change1m',      op: '>',  value: 5,  logic: 'AND' },
+      { field: 'macdHistogram', op: '>',  value: 0,  logic: 'AND' },
+    ],
+  },
+  {
+    id: 'recovery_candidate',
+    name: 'Phục Hồi Tiềm Năng',
+    emoji: '🌱',
+    desc: 'Giảm sâu 3 tháng nhưng bắt đầu phục hồi — hàng rẻ + tín hiệu đảo chiều',
+    conditions: [
+      { field: 'change3m',  op: '<',  value: -15, logic: 'AND' },
+      { field: 'change1w',  op: '>',  value: 2,   logic: 'AND' },
+      { field: 'rsi',       op: '<',  value: 50,  logic: 'AND' },
     ],
   },
 ];
@@ -133,24 +185,34 @@ export const BUILT_IN_PRESETS: Preset[] = [
 
 export function extractField(item: StockIndicatorResult, field: FieldKey): number | null {
   switch (field) {
-    case 'price':        return item.price ?? null;
-    case 'changePct':    return item.changePct ?? null;
-    case 'volume':       return item.volume ? item.volume / 1000 : null; // convert to K
-    case 'rsi':          return item.rsi ?? null;
-    case 'stochK':       return item.stochK ?? null;
-    case 'stochD':       return item.stochD ?? null;
-    case 'macd':         return item.macd ?? null;
-    case 'macdHistogram':return item.macdHistogram ?? null;
+    case 'price':         return item.price ?? null;
+    case 'changePct':     return item.changePct ?? null;
+    case 'volume':        return item.volume ? item.volume / 1000 : null;
+    case 'rsi':           return item.rsi ?? null;
+    case 'stochK':        return item.stochK ?? null;
+    case 'stochD':        return item.stochD ?? null;
+    case 'macd':          return item.macd ?? null;
+    case 'macdHistogram': return item.macdHistogram ?? null;
     case 'bbPct': {
       const { bbUpper, bbLower, price } = item;
       if (!bbUpper || !bbLower || bbUpper === bbLower) return null;
       return ((price - bbLower) / (bbUpper - bbLower)) * 100;
     }
-    case 'pe':           return item.pe ?? null;
-    case 'eps':          return item.eps ?? null;
-    case 'beta':         return item.beta ?? null;
-    case 'marketCapB':   return item.marketCap ? item.marketCap / 1e9 : null;
-    default:             return null;
+    case 'change1w':        return item.change1w ?? null;
+    case 'change1m':        return item.change1m ?? null;
+    case 'change3m':        return item.change3m ?? null;
+    case 'change6m':        return item.change6m ?? null;
+    case 'distFromHigh':    return item.distFromHigh ?? null;
+    case 'distFromLow':     return item.distFromLow ?? null;
+    case 'consecutiveUp':   return item.consecutiveUp ?? null;
+    case 'consecutiveDown': return item.consecutiveDown ?? null;
+    case 'relVolume':       return item.relVolume ?? null;
+    case 'avgVolume20dK':   return item.avgVolume20d ? item.avgVolume20d / 1000 : null;
+    case 'pe':              return item.pe ?? null;
+    case 'eps':             return item.eps ?? null;
+    case 'beta':            return item.beta ?? null;
+    case 'marketCapB':      return item.marketCap ? item.marketCap / 1e9 : null;
+    default:                return null;
   }
 }
 

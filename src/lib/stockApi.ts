@@ -29,6 +29,19 @@ export interface StockIndicatorResult {
   // Day change
   change?: number | null;
   changePct?: number | null;
+  // Price stats (computed from 6mo history)
+  change1w?: number | null;   // % vs 5 sessions ago
+  change1m?: number | null;   // % vs ~21 sessions ago
+  change3m?: number | null;   // % vs ~63 sessions ago
+  change6m?: number | null;   // % vs first session in 6mo data
+  high52w?: number | null;    // 6mo high (proxy)
+  low52w?: number | null;     // 6mo low (proxy)
+  distFromHigh?: number | null; // % below 6mo high
+  distFromLow?: number | null;  // % above 6mo low
+  consecutiveUp?: number | null;   // consecutive sessions closing up
+  consecutiveDown?: number | null; // consecutive sessions closing down
+  avgVolume20d?: number | null;    // 20-day avg volume
+  relVolume?: number | null;       // today volume / avgVolume20d
   error?: string;
 }
 
@@ -108,6 +121,43 @@ export async function fetchStockData(ticker: string): Promise<StockIndicatorResu
     const bbValues = BollingerBands.calculate({ values: closePrices, period: 20, stdDev: 2 });
     const lastBb = bbValues.length > 0 ? bbValues[bbValues.length - 1] : null;
 
+    // ── Price stats from 6mo history ─────────────────────────
+    const last   = closePrices[closePrices.length - 1];
+    const pctChg = (base: number | undefined) =>
+      base && base > 0 ? ((last - base) / base) * 100 : null;
+
+    const change1w = pctChg(closePrices[closePrices.length - 6]);   // ~5 sessions
+    const change1m = pctChg(closePrices[closePrices.length - 22]);  // ~21 sessions
+    const change3m = pctChg(closePrices[closePrices.length - 64]);  // ~63 sessions
+    const change6m = pctChg(closePrices[0]);
+
+    const high52w = Math.max(...closePrices);
+    const low52w  = Math.min(...closePrices);
+    const distFromHigh = ((last - high52w) / high52w) * 100; // negative = below high
+    const distFromLow  = ((last - low52w)  / low52w)  * 100; // positive = above low
+
+    // Consecutive up/down sessions
+    let consecutiveUp = 0;
+    let consecutiveDown = 0;
+    for (let i = closePrices.length - 1; i > 0; i--) {
+      if (closePrices[i] > closePrices[i - 1]) {
+        if (consecutiveDown > 0) break;
+        consecutiveUp++;
+      } else if (closePrices[i] < closePrices[i - 1]) {
+        if (consecutiveUp > 0) break;
+        consecutiveDown++;
+      } else break;
+    }
+
+    // 20-day avg volume + relative volume
+    const volSeries = validData.map(d => d.volume);
+    const avgVolume20d = volSeries.length >= 20
+      ? volSeries.slice(-20).reduce((s, v) => s + v, 0) / 20
+      : null;
+    const relVolume = avgVolume20d && avgVolume20d > 0
+      ? lastData.volume / avgVolume20d
+      : null;
+
     return {
       ticker,
       price: lastData.close,
@@ -125,11 +175,11 @@ export async function fetchStockData(ticker: string): Promise<StockIndicatorResu
       closes7d: closePrices.slice(-7),
       change: closePrices.length >= 2 ? closePrices[closePrices.length - 1] - closePrices[closePrices.length - 2] : null,
       changePct: closePrices.length >= 2 ? ((closePrices[closePrices.length - 1] - closePrices[closePrices.length - 2]) / closePrices[closePrices.length - 2]) * 100 : null,
-      pe,
-      eps,
-      beta,
-      marketCap,
-      bookValue,
+      change1w, change1m, change3m, change6m,
+      high52w, low52w, distFromHigh, distFromLow,
+      consecutiveUp, consecutiveDown,
+      avgVolume20d, relVolume,
+      pe, eps, beta, marketCap, bookValue,
     };
   } catch (error: unknown) {
     return {

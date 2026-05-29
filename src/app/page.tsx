@@ -46,6 +46,19 @@ export interface StockIndicatorResult {
   closes7d?: number[];
   change?: number | null;
   changePct?: number | null;
+  // Price stats
+  change1w?: number | null;
+  change1m?: number | null;
+  change3m?: number | null;
+  change6m?: number | null;
+  high52w?: number | null;
+  low52w?: number | null;
+  distFromHigh?: number | null;
+  distFromLow?: number | null;
+  consecutiveUp?: number | null;
+  consecutiveDown?: number | null;
+  avgVolume20d?: number | null;
+  relVolume?: number | null;
   error?: string;
 }
 

@@ -59,6 +59,18 @@ export interface StockIndicatorResult {
   consecutiveDown?: number | null;
   avgVolume20d?: number | null;
   relVolume?: number | null;
+  mfi?: number | null;
+  mfiPrev?: number | null;
+  obvTrend?: number | null;
+  macdBullishCross?: boolean;
+  macdBearishCross?: boolean;
+  macdAboveZero?: boolean;
+  bbUpperBreakout?: boolean;
+  bbLowerBreakout?: boolean;
+  bbUpperReentry?: boolean;
+  bbLowerReentry?: boolean;
+  rsiBullishCross30?: boolean;
+  rsiBearishCross70?: boolean;
   error?: string;
 }
 

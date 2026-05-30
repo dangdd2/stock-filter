@@ -1,4 +1,4 @@
-import { RSI, MACD, StochasticRSI, BollingerBands } from 'technicalindicators';
+import { RSI, MACD, StochasticRSI, BollingerBands, MFI, OBV } from 'technicalindicators';
 import YahooFinance from 'yahoo-finance2';
 
 const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
@@ -42,6 +42,20 @@ export interface StockIndicatorResult {
   consecutiveDown?: number | null; // consecutive sessions closing down
   avgVolume20d?: number | null;    // 20-day avg volume
   relVolume?: number | null;       // today volume / avgVolume20d
+  // MFI & OBV
+  mfi?: number | null;
+  mfiPrev?: number | null;
+  obvTrend?: number | null;
+  // Crossover / event flags
+  macdBullishCross?: boolean;
+  macdBearishCross?: boolean;
+  macdAboveZero?: boolean;
+  bbUpperBreakout?: boolean;
+  bbLowerBreakout?: boolean;
+  bbUpperReentry?: boolean;
+  bbLowerReentry?: boolean;
+  rsiBullishCross30?: boolean;
+  rsiBearishCross70?: boolean;
   error?: string;
 }
 
@@ -77,16 +91,22 @@ export async function fetchStockData(ticker: string): Promise<StockIndicatorResu
     const timestamps = result.timestamp || [];
     const quote = result.indicators.quote[0];
     const closes: number[] = quote.close || [];
+    const highs:  number[] = quote.high  || [];
+    const lows:   number[] = quote.low   || [];
     const volumes: number[] = quote.volume || [];
 
     // Filter out nulls
     const validData = [];
     for (let i = 0; i < closes.length; i++) {
-      if (closes[i] !== null && closes[i] !== undefined) {
+      if (closes[i] !== null && closes[i] !== undefined &&
+          highs[i]  !== null && highs[i]  !== undefined &&
+          lows[i]   !== null && lows[i]   !== undefined) {
         validData.push({
-          close: closes[i],
-          volume: volumes[i],
-          time: timestamps[i]
+          close:  closes[i],
+          high:   highs[i],
+          low:    lows[i],
+          volume: volumes[i] ?? 0,
+          time:   timestamps[i],
         });
       }
     }
@@ -95,31 +115,46 @@ export async function fetchStockData(ticker: string): Promise<StockIndicatorResu
       throw new Error(`Not enough data for ${ticker}`);
     }
 
-    const closePrices = validData.map(d => d.close);
+    const closePrices  = validData.map(d => d.close);
+    const highPrices   = validData.map(d => d.high);
+    const lowPrices    = validData.map(d => d.low);
+    const volumeSeries = validData.map(d => d.volume);
     const lastData = validData[validData.length - 1];
 
     const rsiValues = RSI.calculate({ values: closePrices, period: 14 });
     const macdValues = MACD.calculate({
       values: closePrices,
-      fastPeriod: 12,
-      slowPeriod: 26,
-      signalPeriod: 9,
-      SimpleMAOscillator: false,
-      SimpleMASignal: false
+      fastPeriod: 12, slowPeriod: 26, signalPeriod: 9,
+      SimpleMAOscillator: false, SimpleMASignal: false,
     });
-
     const stochRsiValues = StochasticRSI.calculate({
-      values: closePrices,
-      rsiPeriod: 14,
-      stochasticPeriod: 14,
-      kPeriod: 3,
-      dPeriod: 3,
+      values: closePrices, rsiPeriod: 14, stochasticPeriod: 14, kPeriod: 3, dPeriod: 3,
     });
-
     const lastStoch = stochRsiValues.length > 0 ? stochRsiValues[stochRsiValues.length - 1] : null;
+    const bbValues  = BollingerBands.calculate({ values: closePrices, period: 20, stdDev: 2 });
+    const lastBb    = bbValues.length > 0 ? bbValues[bbValues.length - 1] : null;
 
-    const bbValues = BollingerBands.calculate({ values: closePrices, period: 20, stdDev: 2 });
-    const lastBb = bbValues.length > 0 ? bbValues[bbValues.length - 1] : null;
+    // ── MFI (Money Flow Index, period 14) ────────────────────
+    const mfiValues = MFI.calculate({
+      high: highPrices, low: lowPrices, close: closePrices,
+      volume: volumeSeries, period: 14,
+    });
+    const lastMfi  = mfiValues.length > 0 ? mfiValues[mfiValues.length - 1] : null;
+    const prevMfi  = mfiValues.length > 1 ? mfiValues[mfiValues.length - 2] : null;
+
+    // ── OBV (On-Balance Volume) ───────────────────────────────
+    const obvValues = OBV.calculate({ close: closePrices, volume: volumeSeries });
+    const lastObv  = obvValues.length > 0 ? obvValues[obvValues.length - 1] : null;
+    // OBV trend: compare last 5 vs last 10 avg (rising = positive)
+    const obvTrend = obvValues.length >= 10
+      ? (obvValues.slice(-5).reduce((s,v)=>s+v,0)/5) - (obvValues.slice(-10,-5).reduce((s,v)=>s+v,0)/5)
+      : null;
+
+    // ── Previous candle data for crossover detection ──────────
+    const prevMacd      = macdValues.length > 1 ? macdValues[macdValues.length - 2] : null;
+    const prevBb        = bbValues.length    > 1 ? bbValues[bbValues.length - 2]     : null;
+    const prevRsi       = rsiValues.length   > 1 ? rsiValues[rsiValues.length - 2]   : null;
+    const lastMacdVal   = macdValues.length  > 0 ? macdValues[macdValues.length - 1] : null;
 
     // ── Price stats from 6mo history ─────────────────────────
     const last   = closePrices[closePrices.length - 1];
@@ -179,6 +214,34 @@ export async function fetchStockData(ticker: string): Promise<StockIndicatorResu
       high52w, low52w, distFromHigh, distFromLow,
       consecutiveUp, consecutiveDown,
       avgVolume20d, relVolume,
+      // MFI & OBV
+      mfi: lastMfi, mfiPrev: prevMfi, obvTrend,
+      // Crossover flags
+      macdBullishCross: !!(prevMacd && lastMacdVal &&
+        prevMacd.MACD != null && prevMacd.signal != null &&
+        lastMacdVal.MACD != null && lastMacdVal.signal != null &&
+        prevMacd.MACD <= prevMacd.signal && lastMacdVal.MACD > lastMacdVal.signal),
+      macdBearishCross: !!(prevMacd && lastMacdVal &&
+        prevMacd.MACD != null && prevMacd.signal != null &&
+        lastMacdVal.MACD != null && lastMacdVal.signal != null &&
+        prevMacd.MACD >= prevMacd.signal && lastMacdVal.MACD < lastMacdVal.signal),
+      macdAboveZero: !!(lastMacdVal?.histogram != null && lastMacdVal.histogram > 0),
+      bbUpperBreakout: !!(prevBb && lastBb &&
+        closePrices[closePrices.length - 2] <= prevBb.upper &&
+        lastData.close > lastBb.upper),
+      bbLowerBreakout: !!(prevBb && lastBb &&
+        closePrices[closePrices.length - 2] >= prevBb.lower &&
+        lastData.close < lastBb.lower),
+      bbUpperReentry: !!(prevBb && lastBb &&
+        closePrices[closePrices.length - 2] > prevBb.upper &&
+        lastData.close <= lastBb.upper),
+      bbLowerReentry: !!(prevBb && lastBb &&
+        closePrices[closePrices.length - 2] < prevBb.lower &&
+        lastData.close >= lastBb.lower),
+      rsiBullishCross30: !!(prevRsi != null && rsiValues.length > 0 &&
+        prevRsi <= 30 && rsiValues[rsiValues.length - 1] > 30),
+      rsiBearishCross70: !!(prevRsi != null && rsiValues.length > 0 &&
+        prevRsi >= 70 && rsiValues[rsiValues.length - 1] < 70),
       pe, eps, beta, marketCap, bookValue,
     };
   } catch (error: unknown) {

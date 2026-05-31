@@ -162,10 +162,13 @@ export default function Home() {
                 {tab.badge ? <span className={`ml-1 px-1.5 py-0.5 bg-${tab.color}-500/30 text-${tab.color}-300 rounded-full text-[10px] font-bold leading-none`}>{tab.badge}</span> : null}
               </button>
             ))}
+            <Link
+              href="/guide"
+              className="flex items-center gap-2 px-4 py-2 transition-colors text-slate-400 hover:bg-slate-700 border-l border-slate-700"
+            >
+              <HelpCircle size={14}/> Hướng dẫn
+            </Link>
           </div>
-          <Link href="/guide" className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded-lg transition-colors border border-transparent hover:border-slate-600 ml-2">
-            <HelpCircle size={14}/> Hướng dẫn
-          </Link>
         </div>
       </header>
 

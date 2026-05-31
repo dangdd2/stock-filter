@@ -11,10 +11,7 @@ export function useAiAnalysis() {
 
   const runAnalysis = useCallback(async (item: StockIndicatorResult) => {
     if (aiTicker === item.ticker) { setAiTicker(null); return; }
-    setAiTicker(item.ticker);
-    setAiContent('');
-    setAiError(null);
-    setAiLoading(true);
+    setAiTicker(item.ticker); setAiContent(''); setAiError(null); setAiLoading(true);
     try {
       const res = await fetch(`/api/analyze/${item.ticker}`, {
         method: 'POST',
@@ -26,9 +23,7 @@ export function useAiAnalysis() {
           bbUpper: item.bbUpper ?? null, bbMiddle: item.bbMiddle ?? null, bbLower: item.bbLower ?? null,
         }),
       });
-      if (!res.ok) throw new Error('Analysis request failed');
-      if (!res.body) throw new Error('No response body');
-
+      if (!res.ok || !res.body) throw new Error('Analysis request failed');
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
@@ -36,27 +31,22 @@ export function useAiAnalysis() {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
+        const lines = buffer.split('\n'); buffer = lines.pop() ?? '';
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           const payload = line.slice(6);
           if (payload === '[DONE]') break;
           try {
-            const parsed = JSON.parse(payload) as { text?: string; error?: string };
-            if (parsed.error) throw new Error(parsed.error);
-            if (parsed.text) setAiContent(prev => prev + parsed.text);
-          } catch { /* skip malformed */ }
+            const p = JSON.parse(payload) as { text?: string; error?: string };
+            if (p.error) throw new Error(p.error);
+            if (p.text) setAiContent(prev => prev + p.text);
+          } catch { /* skip */ }
         }
       }
     } catch (err) {
       setAiError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setAiLoading(false);
-    }
+    } finally { setAiLoading(false); }
   }, [aiTicker]);
 
-  const closeAi = useCallback(() => setAiTicker(null), []);
-
-  return { aiTicker, aiContent, aiLoading, aiError, runAnalysis, closeAi };
+  return { aiTicker, aiContent, aiLoading, aiError, runAnalysis, closeAi: () => setAiTicker(null) };
 }

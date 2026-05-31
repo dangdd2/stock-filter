@@ -20,7 +20,7 @@ interface ChartDataPoint {
 const CandleBody = ({ x, y, width, height, payload }: { x?: number; y?: number; width?: number; height?: number; payload?: ChartDataPoint }) => {
   if (x===undefined||y===undefined||width===undefined||height===undefined||!payload) return null;
   const color = payload.close >= payload.open ? '#10b981' : '#f43f5e';
-  const gap = Math.max(Math.floor(width*0.15),1);
+  const gap = Math.max(Math.floor(width*0.15), 1);
   return <rect x={x+gap} y={y} width={Math.max(width-gap*2,1)} height={Math.max(height,1.5)} fill={color}/>;
 };
 
@@ -75,8 +75,8 @@ export default function ChartView({ ticker }: { ticker: string }) {
   if (error)   return <div className="p-8 text-center text-rose-400">Error: {error}</div>;
   if (!chartData.length) return <div className="p-8 text-center text-slate-400">No chart data available.</div>;
 
-  const minPrice = Math.min(...chartData.map(d=>d.low));
-  const maxPrice = Math.max(...chartData.map(d=>d.high));
+  const minPrice  = Math.min(...chartData.map(d=>d.low));
+  const maxPrice  = Math.max(...chartData.map(d=>d.high));
   const maxVolume = Math.max(...chartData.map(d=>d.volume??0));
 
   return (
@@ -116,10 +116,11 @@ export default function ChartView({ ticker }: { ticker: string }) {
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-      {[{title:'RSI (14)',key:'rsi',color:'#a78bfa',ticks:[30,70],refs:[{y:70,s:'#f43f5e'},{y:30,s:'#10b981'}],domain:[0,100] as [number,number]},
-        {title:'MACD (12,26,9)',key:'macd',color:'#3b82f6',ticks:undefined,refs:[],domain:undefined},
-        {title:'Stochastic RSI',key:'stochK',color:'#3b82f6',ticks:[20,80],refs:[{y:80,s:'#f43f5e'},{y:20,s:'#10b981'}],domain:[0,100] as [number,number]}
-      ].map(({title,key,color,ticks,refs,domain})=>(
+      {[
+        {title:'RSI (14)',key:'rsi',ticks:[30,70],refs:[{y:70,s:'#f43f5e'},{y:30,s:'#10b981'}],domain:[0,100] as [number,number]},
+        {title:'MACD (12,26,9)',key:'macd',ticks:undefined,refs:[],domain:undefined},
+        {title:'Stochastic RSI',key:'stochK',ticks:[20,80],refs:[{y:80,s:'#f43f5e'},{y:20,s:'#10b981'}],domain:[0,100] as [number,number]},
+      ].map(({title,key,ticks,refs,domain})=>(
         <div key={key} className="h-[120px] w-full mt-4">
           <h4 className="text-sm font-semibold mb-2 text-slate-400">{title}</h4>
           <ResponsiveContainer width="100%" height="100%">
@@ -129,18 +130,14 @@ export default function ChartView({ ticker }: { ticker: string }) {
               <YAxis domain={domain} stroke="#94a3b8" fontSize={11} ticks={ticks} width={70} orientation="right"/>
               <Tooltip contentStyle={{backgroundColor:'#1e293b',borderColor:'#334155',color:'#f1f5f9'}}/>
               {refs.map(r=><ReferenceLine key={r.y} y={r.y} stroke={r.s} strokeDasharray="5 5"/>)}
-              {key==='macd' ? (
-                <>
-                  <Bar dataKey="macdHistogram" name="Histogram">{chartData.map((e,i)=><Cell key={i} fill={(e.macdHistogram??0)>0?'#10b981':'#f43f5e'}/>)}</Bar>
-                  <Line type="monotone" dataKey="macd" stroke="#3b82f6" strokeWidth={1.5} dot={false} name="MACD"/>
-                  <Line type="monotone" dataKey="macdSignal" stroke="#f59e0b" strokeWidth={1.5} dot={false} name="Signal"/>
-                </>
-              ) : key==='stochK' ? (
-                <>
-                  <Line type="monotone" dataKey="stochK" stroke="#3b82f6" strokeWidth={1.5} dot={false} name="%K" connectNulls/>
-                  <Line type="monotone" dataKey="stochD" stroke="#f59e0b" strokeWidth={1.5} dot={false} name="%D" connectNulls/>
-                </>
-              ) : <Line type="monotone" dataKey={key} stroke={color} strokeWidth={1.5} dot={false} name={key.toUpperCase()} connectNulls/>}
+              {key==='macd'?(<>
+                <Bar dataKey="macdHistogram" name="Histogram">{chartData.map((e,i)=><Cell key={i} fill={(e.macdHistogram??0)>0?'#10b981':'#f43f5e'}/>)}</Bar>
+                <Line type="monotone" dataKey="macd" stroke="#3b82f6" strokeWidth={1.5} dot={false} name="MACD"/>
+                <Line type="monotone" dataKey="macdSignal" stroke="#f59e0b" strokeWidth={1.5} dot={false} name="Signal"/>
+              </>):key==='stochK'?(<>
+                <Line type="monotone" dataKey="stochK" stroke="#3b82f6" strokeWidth={1.5} dot={false} name="%K" connectNulls/>
+                <Line type="monotone" dataKey="stochD" stroke="#f59e0b" strokeWidth={1.5} dot={false} name="%D" connectNulls/>
+              </>):<Line type="monotone" dataKey={key} stroke="#a78bfa" strokeWidth={1.5} dot={false} name={key.toUpperCase()} connectNulls/>}
             </ComposedChart>
           </ResponsiveContainer>
         </div>

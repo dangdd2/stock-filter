@@ -1,11 +1,8 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { type StockIndicatorResult, type Watchlist, MASTER_ID } from '@/types';
-import {
-  loadSignalHistory, saveSignalHistory, addNewSignals, fillSignalPrices,
-  type SignalLog, type SignalInput,
-} from '@/lib/signalHistory';
+import { loadSignalHistory, saveSignalHistory, addNewSignals, fillSignalPrices, type SignalLog, type SignalInput } from '@/lib/signalHistory';
 
 export function useStockData(
   activeWatchlist: Watchlist | undefined,
@@ -13,21 +10,19 @@ export function useStockData(
   masterWatchlist: Watchlist | undefined,
   preventFetch: React.MutableRefObject<boolean>,
 ) {
-  const [data,         setData]         = useState<StockIndicatorResult[]>([]);
-  const [loading,      setLoading]      = useState(false);
-  const [error,        setError]        = useState<string | null>(null);
-  const [masterData,   setMasterData]   = useState<StockIndicatorResult[]>([]);
-  const [masterLoading,setMasterLoading]= useState(false);
-  const [lastUpdated,  setLastUpdated]  = useState<Date | null>(null);
-  const [signalHistory,setSignalHistory]= useState<SignalLog[]>([]);
+  const [data,          setData]          = useState<StockIndicatorResult[]>([]);
+  const [loading,       setLoading]       = useState(false);
+  const [error,         setError]         = useState<string | null>(null);
+  const [masterData,    setMasterData]    = useState<StockIndicatorResult[]>([]);
+  const [masterLoading, setMasterLoading] = useState(false);
+  const [lastUpdated,   setLastUpdated]   = useState<Date | null>(null);
+  const [signalHistory, setSignalHistory] = useState<SignalLog[]>([]);
 
-  // Load signal history on mount
   useEffect(() => { setSignalHistory(loadSignalHistory()); }, []);
 
   const fetchData = useCallback(async () => {
     if (!activeWatchlist || activeWatchlist.tickers.length === 0) { setData([]); return; }
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
       const res = await fetch(`/api/stocks?tickers=${activeWatchlist.tickers.join(',')}`);
       if (!res.ok) throw new Error('Failed to fetch data');
@@ -60,9 +55,7 @@ export function useStockData(
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }, [activeWatchlist]);
 
   const fetchMasterData = useCallback(async () => {
@@ -76,21 +69,18 @@ export function useStockData(
     } catch { /* silent */ } finally { setMasterLoading(false); }
   }, [masterWatchlist]);
 
-  // Fetch on watchlist change
   useEffect(() => {
     if (preventFetch.current) { preventFetch.current = false; return; }
     if (activeWatchlistId) fetchData();
   }, [activeWatchlistId, fetchData, preventFetch]);
 
-  // Sync masterData
   useEffect(() => { if (activeWatchlistId === MASTER_ID) setMasterData(data); }, [data, activeWatchlistId]);
   useEffect(() => { if (activeWatchlistId !== MASTER_ID) fetchMasterData(); }, [fetchMasterData, activeWatchlistId]);
 
   return {
     data, loading, error,
     masterData, masterLoading,
-    lastUpdated,
-    signalHistory, setSignalHistory,
+    lastUpdated, signalHistory, setSignalHistory,
     fetchData,
   };
 }

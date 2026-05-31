@@ -1,0 +1,53 @@
+// ─────────────────────────────────────────────────────────────
+// Shared types used across the app
+// ─────────────────────────────────────────────────────────────
+
+export interface Watchlist {
+  id: string;
+  name: string;
+  tickers: string[];
+}
+
+export interface StockIndicatorResult {
+  ticker: string;
+  price: number;
+  rsi: number | null;
+  stochK: number | null;
+  stochD: number | null;
+  macd: number | null;
+  macdSignal: number | null;
+  macdHistogram: number | null;
+  volume: number;
+  timestamp: number;
+  pe?: number | null;
+  eps?: number | null;
+  beta?: number | null;
+  marketCap?: number | null;
+  bookValue?: number | null;
+  bbUpper?: number | null;
+  bbMiddle?: number | null;
+  bbLower?: number | null;
+  closes7d?: number[];
+  change?: number | null;
+  changePct?: number | null;
+  change1w?: number | null;
+  change1m?: number | null;
+  change3m?: number | null;
+  change6m?: number | null;
+  high52w?: number | null;
+  low52w?: number | null;
+  distFromHigh?: number | null;
+  distFromLow?: number | null;
+  consecutiveUp?: number | null;
+  consecutiveDown?: number | null;
+  avgVolume20d?: number | null;
+  relVolume?: number | null;
+  error?: string;
+}
+
+export type RsiFilter   = 'ALL' | 'OVERSOLD' | 'OVERBOUGHT' | 'NEUTRAL';
+export type MacdFilter  = 'ALL' | 'BULLISH' | 'BEARISH';
+export type StochFilter = 'ALL' | 'OVERSOLD' | 'OVERBOUGHT' | 'BULLISH_CROSS' | 'BEARISH_CROSS';
+export type ActiveTab   = 'watchlist' | 'history' | 'heatmap' | 'screener';
+
+export const MASTER_ID = 'master';

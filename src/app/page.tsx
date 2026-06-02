@@ -6,22 +6,20 @@ import Link from 'next/link';
 import {
   Activity, TrendingUp, TrendingDown, Filter, AlertCircle, RefreshCw,
   BarChart2, X, Plus, Trash2, Brain, GripVertical, Settings2, EyeOff,
-  History, Map as MapIcon, SlidersHorizontal, HelpCircle, MoreVertical, RefreshCcw,
+  History, Map as MapIcon, SlidersHorizontal, HelpCircle, MoreVertical,
+  RefreshCcw, Bell, LayoutGrid,
 } from 'lucide-react';
 
-// ── Types ──────────────────────────────────────────────────────
 import { type RsiFilter, type MacdFilter, type StochFilter, MASTER_ID } from '@/types';
 export type { Watchlist, StockIndicatorResult } from '@/types';
 
-// ── Hooks ──────────────────────────────────────────────────────
 import { useWatchlists } from '@/hooks/useWatchlists';
 import { useStockData }  from '@/hooks/useStockData';
 import { useAiAnalysis } from '@/hooks/useAiAnalysis';
 
-// ── Lib ────────────────────────────────────────────────────────
-import { clearSignalHistory }     from '@/lib/signalHistory';
+import { clearSignalHistory } from '@/lib/signalHistory';
+import { saveAlerts, clearAlerts } from '@/lib/smartAlerts';
 
-// ── Components ─────────────────────────────────────────────────
 import SignalHistoryPanel from '@/components/SignalHistoryPanel';
 import MarketHeatmap      from '@/components/MarketHeatmap';
 import MarketStatusBar    from '@/components/MarketStatusBar';
@@ -30,16 +28,16 @@ import ManageModal        from '@/components/watchlist/ManageModal';
 import ChartView          from '@/components/ChartView';
 import AiPanel            from '@/components/AiPanel';
 import Sparkline          from '@/components/Sparkline';
+import SmartAlertsPanel   from '@/components/SmartAlertsPanel';
+import MultiChart         from '@/components/MultiChart';
 
-type ActiveTab = 'watchlist' | 'history' | 'heatmap' | 'screener';
+type ActiveTab = 'watchlist' | 'history' | 'heatmap' | 'screener' | 'alerts' | 'multicharts';
 
 export default function Home() {
-  // ── Custom hooks ───────────────────────────────────────────
   const wl = useWatchlists();
   const sd = useStockData(wl.activeWatchlist, wl.activeWatchlistId, wl.masterWatchlist, wl.preventFetch);
   const ai = useAiAnalysis();
 
-  // ── Local UI state ─────────────────────────────────────────
   const [rsiFilter,    setRsiFilter]    = useState<RsiFilter>('ALL');
   const [macdFilter,   setMacdFilter]   = useState<MacdFilter>('ALL');
   const [stochFilter,  setStochFilter]  = useState<StochFilter>('ALL');
@@ -51,16 +49,12 @@ export default function Home() {
   const [ignoredSignalTickers, setIgnoredSignalTickers] = useState<string[]>([]);
   const pendingExpandTicker = useRef<string | null>(null);
 
-  // Load ignored tickers
   useEffect(() => {
     const s = localStorage.getItem('vn_stock_ignored_signals');
     if (s) { try { setIgnoredSignalTickers(JSON.parse(s)); } catch { /* ignore */ } }
   }, []);
-  useEffect(() => {
-    localStorage.setItem('vn_stock_ignored_signals', JSON.stringify(ignoredSignalTickers));
-  }, [ignoredSignalTickers]);
+  useEffect(() => { localStorage.setItem('vn_stock_ignored_signals', JSON.stringify(ignoredSignalTickers)); }, [ignoredSignalTickers]);
 
-  // ── Filtered data ──────────────────────────────────────────
   const filteredData = useMemo(() => sd.data.filter(item => {
     if (item.error) return false;
     const passRsi =
@@ -90,7 +84,6 @@ export default function Home() {
     }
   }, [filteredData]);
 
-  // ── Signals ────────────────────────────────────────────────
   const { buySignals, sellSignals } = useMemo(() => {
     const buy: { ticker: string; reasons: string[]; entry: number; target: number | null }[] = [];
     const sell: typeof buy = [];
@@ -110,7 +103,6 @@ export default function Home() {
     return { buySignals: buy.sort(byConviction), sellSignals: sell.sort(byConviction) };
   }, [sd.data, ignoredSignalTickers]);
 
-  // ── Helpers ────────────────────────────────────────────────
   const handleSignalTickerClick = (ticker: string) => {
     if (sd.data.some(d => d.ticker === ticker)) {
       setExpandedTicker(p => p === ticker ? null : ticker);
@@ -133,12 +125,10 @@ export default function Home() {
 
   const allData = sd.masterData.length > 0 ? sd.masterData : sd.data;
   const fmtCap = (v?: number | null) => !v ? '-' : v >= 1e12 ? `${(v/1e12).toFixed(2)}T` : v >= 1e9 ? `${(v/1e9).toFixed(2)}B` : v >= 1e6 ? `${(v/1e6).toFixed(2)}M` : v.toLocaleString();
+  const unreadAlerts = (sd.smartAlerts ?? []).filter(a => !a.dismissed && !a.read).length;
 
-  // ── Render ─────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 font-sans pb-10">
-
-      {/* Header */}
       <header className="bg-slate-800 border-b border-slate-700 py-4 px-6 sticky top-0 z-10 flex justify-between items-center shadow-md">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-blue-500/20 text-blue-400 rounded-lg"><Activity size={24}/></div>
@@ -149,10 +139,12 @@ export default function Home() {
         </div>
         <div className="flex rounded-lg overflow-hidden border border-slate-700 text-sm">
           {([
-            { id: 'watchlist' as ActiveTab, label: 'Watchlist', icon: <BarChart2 size={14}/>,          cls: 'blue'   },
-            { id: 'history'   as ActiveTab, label: 'Lịch Sử',   icon: <History size={14}/>,             cls: 'violet', badge: sd.signalHistory.length },
-            { id: 'heatmap'   as ActiveTab, label: 'Heatmap',   icon: <MapIcon size={14}/>,             cls: 'emerald' },
-            { id: 'screener'  as ActiveTab, label: 'Screener',  icon: <SlidersHorizontal size={14}/>,   cls: 'amber'  },
+            { id: 'watchlist'   as ActiveTab, label: 'Watchlist',   icon: <BarChart2 size={14}/>,        cls: 'blue'    },
+            { id: 'multicharts' as ActiveTab, label: 'Multi Chart', icon: <LayoutGrid size={14}/>,       cls: 'cyan'    },
+            { id: 'history'     as ActiveTab, label: 'Lịch Sử',     icon: <History size={14}/>,           cls: 'violet', badge: sd.signalHistory.length },
+            { id: 'alerts'      as ActiveTab, label: 'Alerts',      icon: <Bell size={14}/>,              cls: 'amber',  badge: unreadAlerts || undefined },
+            { id: 'heatmap'     as ActiveTab, label: 'Heatmap',     icon: <MapIcon size={14}/>,           cls: 'emerald' },
+            { id: 'screener'    as ActiveTab, label: 'Screener',    icon: <SlidersHorizontal size={14}/>, cls: 'amber'   },
           ]).map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-4 py-2 transition-colors ${activeTab === tab.id ? `bg-${tab.cls}-500/20 text-${tab.cls}-300 font-semibold` : 'text-slate-400 hover:bg-slate-700'}`}>
@@ -167,31 +159,44 @@ export default function Home() {
       </header>
 
       <main className="w-full px-4 py-4 space-y-3">
-
-        {/* Market Status Bar */}
         <MarketStatusBar loading={sd.loading} lastUpdated={sd.lastUpdated} onRefresh={sd.fetchData}/>
 
-        {/* History Tab */}
+        {/* Multi Chart */}
+        {activeTab === 'multicharts' && (
+          <MultiChart data={allData} watchlists={wl.watchlists}
+            onTickerClick={t => { setActiveTab('watchlist'); handleSignalTickerClick(t); }}/>
+        )}
+
+        {/* Alerts */}
+        {activeTab === 'alerts' && (
+          <SmartAlertsPanel
+            alerts={sd.smartAlerts ?? []}
+            onMarkAllRead={() => { const u = (sd.smartAlerts ?? []).map(a => ({ ...a, read: true })); sd.setSmartAlerts(u); saveAlerts(u); }}
+            onDismiss={(id: string) => { const u = (sd.smartAlerts ?? []).map(a => a.id === id ? { ...a, dismissed: true } : a); sd.setSmartAlerts(u); saveAlerts(u); }}
+            onClear={() => { clearAlerts(); sd.setSmartAlerts([]); }}
+            onTickerClick={(t: string) => { setActiveTab('watchlist'); handleSignalTickerClick(t); }}
+          />
+        )}
+
+        {/* History */}
         {activeTab === 'history' && (
           <SignalHistoryPanel logs={sd.signalHistory} onClear={() => { clearSignalHistory(); sd.setSignalHistory([]); }}/>
         )}
 
-        {/* Heatmap Tab */}
+        {/* Heatmap */}
         {activeTab === 'heatmap' && (
           <MarketHeatmap data={allData} watchlists={wl.watchlists}
             onTickerClick={t => { setActiveTab('watchlist'); handleSignalTickerClick(t); }}/>
         )}
 
-        {/* Screener Tab */}
+        {/* Screener */}
         {activeTab === 'screener' && (
           <AdvancedScreener data={allData}
             onTickerClick={t => { setActiveTab('watchlist'); handleSignalTickerClick(t); }}/>
         )}
 
-        {/* Watchlist Tab */}
+        {/* Watchlist */}
         {activeTab === 'watchlist' && <>
-
-          {/* Control Bar */}
           <div className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
               <BarChart2 size={15} className="text-blue-400 shrink-0"/>
@@ -203,28 +208,21 @@ export default function Home() {
                 <div className="absolute inset-y-0 right-2 flex items-center pointer-events-none text-slate-500"><MoreVertical size={13}/></div>
               </div>
             </div>
-
             {wl.activeWatchlist && (wl.activeWatchlistId === MASTER_ID ? (
               <button onClick={wl.syncMasterWatchlist} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-md text-xs transition-colors">
                 <RefreshCcw size={12}/> Sync
               </button>
             ) : (
               <div className="flex items-center gap-2">
-                <button onClick={wl.openManageModal} className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md text-xs transition-colors">
-                  <Settings2 size={12}/> Manage
-                </button>
-                <button onClick={wl.createWatchlist} className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 rounded-md text-xs transition-colors">
-                  <Plus size={12}/> New
-                </button>
+                <button onClick={wl.openManageModal} className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md text-xs transition-colors"><Settings2 size={12}/> Manage</button>
+                <button onClick={wl.createWatchlist} className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 rounded-md text-xs transition-colors"><Plus size={12}/> New</button>
               </div>
             ))}
-
             <form onSubmit={wl.addTicker} className="flex gap-2">
               <input type="text" placeholder="Add ticker (e.g. VCB)" value={wl.newTicker} onChange={e => wl.setNewTicker(e.target.value)}
                 className="bg-slate-900 border border-slate-700 rounded-md px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 w-44"/>
               <button type="submit" className="p-1.5 bg-blue-500 hover:bg-blue-600 rounded-md text-white transition-colors"><Plus size={15}/></button>
             </form>
-
             <div className="w-px h-6 bg-slate-700 mx-1 hidden sm:block"/>
             <div className="flex items-center gap-2 flex-wrap">
               <Filter size={14} className="text-slate-400 shrink-0"/>
@@ -244,7 +242,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Signals Panel */}
           {(buySignals.length > 0 || sellSignals.length > 0) && (
             <div className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 space-y-3">
               <div className="flex items-center gap-2 flex-wrap">
@@ -257,17 +254,15 @@ export default function Home() {
               {[{ signals: buySignals, dir: 'buy' as const }, { signals: sellSignals, dir: 'sell' as const }].map(({ signals, dir }) =>
                 signals.length > 0 ? (
                   <div key={dir} className="flex flex-wrap items-start gap-2">
-                    <span className={`flex items-center gap-1 text-xs font-semibold shrink-0 pt-0.5 min-w-[70px] ${dir === 'buy' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {dir === 'buy' ? <TrendingUp size={13}/> : <TrendingDown size={13}/>} {dir === 'buy' ? 'MUA' : 'BÁN'} ({signals.length})
+                    <span className={`flex items-center gap-1 text-xs font-semibold shrink-0 pt-0.5 min-w-[70px] ${dir==='buy'?'text-emerald-400':'text-rose-400'}`}>
+                      {dir==='buy'?<TrendingUp size={13}/>:<TrendingDown size={13}/>} {dir==='buy'?'MUA':'BÁN'} ({signals.length})
                     </span>
                     <div className="flex flex-wrap gap-2">
                       {signals.map(({ ticker, reasons, entry, target }) => {
-                        const score = reasons.length;
-                        const c = dir === 'buy' ? 'emerald' : 'rose';
+                        const score = reasons.length; const c = dir==='buy'?'emerald':'rose';
                         return (
                           <div key={ticker} onClick={() => handleSignalTickerClick(ticker)}
-                            className={`relative flex flex-col px-2.5 py-1.5 border rounded-lg text-xs cursor-pointer hover:brightness-110 transition-all group ${
-                              score===3?`bg-${c}-500/25 border-${c}-500/50 ring-1 ring-${c}-500/30`:score===2?`bg-${c}-500/15 border-${c}-500/35`:`bg-${c}-500/10 border-${c}-500/20`}`}>
+                            className={`relative flex flex-col px-2.5 py-1.5 border rounded-lg text-xs cursor-pointer hover:brightness-110 transition-all group ${score===3?`bg-${c}-500/25 border-${c}-500/50 ring-1 ring-${c}-500/30`:score===2?`bg-${c}-500/15 border-${c}-500/35`:`bg-${c}-500/10 border-${c}-500/20`}`}>
                             <div className="flex items-center gap-1.5">
                               <span className={`font-bold text-${c}-300`}>{ticker}</span>
                               <span className={`text-${c}-500/70`}>{reasons.join(' · ')}</span>
@@ -275,14 +270,14 @@ export default function Home() {
                               <button onClick={e=>{e.stopPropagation();setIgnoredSignalTickers(p=>[...p,ticker]);}} className="ml-auto p-0.5 text-slate-600 hover:text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity"><EyeOff size={11}/></button>
                             </div>
                             <div className="flex items-center gap-1 mt-1 text-[10px] text-slate-400">
-                              {target != null ? (<>
+                              {target!=null?(<>
                                 <span className={`text-${c}-400 font-medium`}>{entry.toLocaleString()}</span>
                                 <span className="text-slate-500">-</span>
                                 <span className={`text-${c}-300 font-medium`}>{Math.round(target).toLocaleString()}</span>
                                 <span className="text-slate-500">(</span>
                                 <span className={`text-${c}-300 font-semibold`}>{dir==='buy'?'+':''}{(((target-entry)/entry)*100).toFixed(1)}%</span>
                                 <span className="text-slate-500">)</span>
-                              </>) : <span className={`text-${c}-400 font-medium`}>{entry.toLocaleString()}</span>}
+                              </>):<span className={`text-${c}-400 font-medium`}>{entry.toLocaleString()}</span>}
                             </div>
                           </div>
                         );
@@ -294,7 +289,6 @@ export default function Home() {
             </div>
           )}
 
-          {/* Main Table */}
           <section>
             {sd.error && (
               <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-xl flex items-start gap-3 mb-6">
@@ -307,24 +301,17 @@ export default function Home() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-900/50 text-slate-400 text-[10px] uppercase tracking-wider">
-                      <th className="pl-3 pr-1 py-4 w-6"/>
-                      <th className="px-4 py-4 font-medium">Ticker</th>
-                      <th className="px-4 py-4 font-medium">Price</th>
-                      <th className="px-4 py-4 font-medium">Change</th>
-                      <th className="px-4 py-4 font-medium">P/E</th>
-                      <th className="px-4 py-4 font-medium">EPS</th>
-                      <th className="px-4 py-4 font-medium">Beta</th>
-                      <th className="px-4 py-4 font-medium">Mkt Cap</th>
-                      <th className="px-4 py-4 font-medium">BV/Share</th>
-                      <th className="px-4 py-4 font-medium">BB %B</th>
-                      <th className="px-4 py-4 font-medium">RSI</th>
-                      <th className="px-4 py-4 font-medium">Stoch RSI</th>
-                      <th className="px-4 py-4 font-medium">MACD Hist</th>
-                      <th className="px-4 py-4 font-medium text-right">Actions</th>
+                      <th className="pl-3 pr-1 py-4 w-6"/><th className="px-4 py-4 font-medium">Ticker</th>
+                      <th className="px-4 py-4 font-medium">Price</th><th className="px-4 py-4 font-medium">Change</th>
+                      <th className="px-4 py-4 font-medium">P/E</th><th className="px-4 py-4 font-medium">EPS</th>
+                      <th className="px-4 py-4 font-medium">Beta</th><th className="px-4 py-4 font-medium">Mkt Cap</th>
+                      <th className="px-4 py-4 font-medium">BV/Share</th><th className="px-4 py-4 font-medium">BB %B</th>
+                      <th className="px-4 py-4 font-medium">RSI</th><th className="px-4 py-4 font-medium">Stoch RSI</th>
+                      <th className="px-4 py-4 font-medium">MACD Hist</th><th className="px-4 py-4 font-medium text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-700/50">
-                    {sd.loading ? Array.from({length:6}).map((_,i) => (
+                    {sd.loading ? Array.from({length:6}).map((_,i)=>(
                       <tr key={i} className="animate-pulse">
                         <td className="pl-3 pr-1 py-4"><div className="w-3 h-3 bg-slate-700 rounded"/></td>
                         <td className="px-4 py-4"><div className="h-3.5 w-10 bg-slate-700 rounded mb-1.5"/><div className="h-2 w-8 bg-slate-800 rounded"/></td>
@@ -333,104 +320,42 @@ export default function Home() {
                         {Array.from({length:9}).map((_,j)=><td key={j} className="px-4 py-4"><div className="h-3 w-10 bg-slate-700 rounded"/></td>)}
                         <td className="px-4 py-4 text-right"><div className="flex justify-end gap-2"><div className="h-7 w-7 bg-slate-700 rounded-md"/><div className="h-7 w-7 bg-slate-700 rounded-md"/><div className="h-7 w-7 bg-slate-700 rounded-md"/></div></td>
                       </tr>
-                    )) : rowData.length === 0 ? (
+                    )) : rowData.length===0 ? (
                       <tr><td colSpan={14} className="px-6 py-12 text-center text-slate-500">
-                        {wl.activeWatchlist && wl.activeWatchlist.tickers.length === 0 ? 'Your watchlist is empty. Add some tickers to get started!' : 'No stocks match the selected filters.'}
+                        {wl.activeWatchlist?.tickers.length===0?'Your watchlist is empty. Add some tickers to get started!':'No stocks match the selected filters.'}
                       </td></tr>
-                    ) : rowData.map((item, rowIdx) => {
-                      const rsiZone  = item.rsi    == null ? null : item.rsi    > 70 ? 'overbought' : item.rsi    < 30 ? 'oversold' : 'neutral';
-                      const stochZone= item.stochK == null ? null : item.stochK > 80 ? 'overbought' : item.stochK < 20 ? 'oversold' : 'neutral';
-                      const zoneBadge = (z: typeof rsiZone) =>
-                        z==='oversold'  ?'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300':
-                        z==='overbought'?'bg-rose-500/15 border border-rose-500/30 text-rose-300':
-                        z==='neutral'   ?'bg-slate-700/60 border border-slate-600/40 text-slate-300':'text-slate-500';
-                      const isExpanded = expandedTicker === item.ticker;
+                    ) : rowData.map((item,rowIdx)=>{
+                      const rsiZone  = item.rsi==null?null:item.rsi>70?'overbought':item.rsi<30?'oversold':'neutral';
+                      const stochZone= item.stochK==null?null:item.stochK>80?'overbought':item.stochK<20?'oversold':'neutral';
+                      const zoneBadge= (z:typeof rsiZone)=>z==='oversold'?'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300':z==='overbought'?'bg-rose-500/15 border border-rose-500/30 text-rose-300':z==='neutral'?'bg-slate-700/60 border border-slate-600/40 text-slate-300':'text-slate-500';
+                      const isExpanded=expandedTicker===item.ticker;
                       return (
                         <Fragment key={item.ticker}>
                           <tr id={`row-${item.ticker}`} draggable
-                            onDragStart={()=>setTableDragIdx(rowIdx)}
-                            onDragOver={e=>{e.preventDefault();setTableDragOverIdx(rowIdx);}}
-                            onDrop={()=>handleTableDrop(rowIdx)}
-                            onDragEnd={()=>{setTableDragIdx(null);setTableDragOverIdx(null);}}
+                            onDragStart={()=>setTableDragIdx(rowIdx)} onDragOver={e=>{e.preventDefault();setTableDragOverIdx(rowIdx);}}
+                            onDrop={()=>handleTableDrop(rowIdx)} onDragEnd={()=>{setTableDragIdx(null);setTableDragOverIdx(null);}}
                             className={`transition-colors ${tableDragOverIdx===rowIdx&&tableDragIdx!==rowIdx?'bg-blue-500/10 border-t-2 border-t-blue-500':tableDragIdx===rowIdx?'opacity-40 bg-slate-700/20':isExpanded?'bg-slate-700/20':'hover:bg-slate-700/20'}`}>
                             <td className="pl-3 pr-1 py-4 cursor-grab text-slate-600 hover:text-slate-400 transition-colors"><GripVertical size={14}/></td>
-                            <td className="px-4 py-4">
-                              <div className="font-bold text-slate-200">{item.ticker}</div>
-                              {item.timestamp && <div className="text-[10px] text-slate-500 whitespace-nowrap">{format(new Date(item.timestamp*1000),'MMM dd')}</div>}
-                            </td>
-                            <td className="px-4 py-4">
-                              <div className="flex items-center gap-2">
-                                <Sparkline values={item.closes7d??[]}/>
-                                <span className="font-mono text-slate-300 text-sm tabular-nums">{item.price?item.price.toLocaleString():'-'}</span>
-                              </div>
-                            </td>
-                            <td className="px-4 py-4">
-                              {item.changePct!=null&&item.change!=null?(
-                                <div className={`inline-flex flex-col px-2 py-0.5 rounded-md font-mono text-xs tabular-nums font-bold ${item.changePct>0?'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300':item.changePct<0?'bg-rose-500/15 border border-rose-500/30 text-rose-300':'bg-slate-700/60 border border-slate-600/40 text-slate-400'}`}>
-                                  <span>{item.changePct>0?'+':''}{item.changePct.toFixed(2)}%</span>
-                                  <span className="text-[9px] font-normal opacity-75 leading-none mt-0.5">{item.change>0?'+':''}{item.change.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
-                                </div>
-                              ):<span className="text-slate-500 text-xs">-</span>}
-                            </td>
+                            <td className="px-4 py-4"><div className="font-bold text-slate-200">{item.ticker}</div>{item.timestamp&&<div className="text-[10px] text-slate-500 whitespace-nowrap">{format(new Date(item.timestamp*1000),'MMM dd')}</div>}</td>
+                            <td className="px-4 py-4"><div className="flex items-center gap-2"><Sparkline values={item.closes7d??[]}/><span className="font-mono text-slate-300 text-sm tabular-nums">{item.price?item.price.toLocaleString():'-'}</span></div></td>
+                            <td className="px-4 py-4">{item.changePct!=null&&item.change!=null?(<div className={`inline-flex flex-col px-2 py-0.5 rounded-md font-mono text-xs tabular-nums font-bold ${item.changePct>0?'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300':item.changePct<0?'bg-rose-500/15 border border-rose-500/30 text-rose-300':'bg-slate-700/60 border border-slate-600/40 text-slate-400'}`}><span>{item.changePct>0?'+':''}{item.changePct.toFixed(2)}%</span><span className="text-[9px] font-normal opacity-75 leading-none mt-0.5">{item.change>0?'+':''}{item.change.toLocaleString(undefined,{maximumFractionDigits:0})}</span></div>):<span className="text-slate-500 text-xs">-</span>}</td>
                             <td className="px-4 py-4 font-mono text-slate-400 text-xs">{item.pe?item.pe.toFixed(2):'-'}</td>
                             <td className="px-4 py-4 font-mono text-slate-400 text-xs">{item.eps?item.eps.toLocaleString():'-'}</td>
                             <td className="px-4 py-4 font-mono text-slate-400 text-xs">{item.beta?item.beta.toFixed(2):'-'}</td>
                             <td className="px-4 py-4 font-mono text-slate-400 text-xs">{fmtCap(item.marketCap)}</td>
                             <td className="px-4 py-4 font-mono text-slate-400 text-xs">{item.bookValue?item.bookValue.toLocaleString():'-'}</td>
-                            <td className="px-4 py-4 text-xs font-mono">{(()=>{
-                              const {bbUpper,bbLower,price}=item;
-                              if(!bbUpper||!bbLower||bbUpper===bbLower) return <span className="text-slate-500">-</span>;
-                              const pct=(price-bbLower)/(bbUpper-bbLower);
-                              return <div className={`flex flex-col ${pct>1?'text-rose-400':pct<0?'text-emerald-400':'text-slate-300'}`}>
-                                <span>{(pct*100).toFixed(0)}%</span>
-                                <span className="text-[10px] opacity-70">{pct>1?'↑ Above':pct<0?'↓ Below':'Inside'}</span>
-                              </div>;
-                            })()}</td>
-                            <td className="px-4 py-4">
-                              {item.rsi!=null?(
-                                <div className={`inline-flex flex-col items-center px-2 py-0.5 rounded-md font-mono text-xs font-bold tabular-nums ${zoneBadge(rsiZone)}`}>
-                                  <span>{item.rsi.toFixed(1)}</span>
-                                  {rsiZone!=='neutral'&&<span className="text-[9px] font-normal opacity-80 leading-none mt-0.5">{rsiZone==='oversold'?'OVERSOLD':'OVERBOUGHT'}</span>}
-                                </div>
-                              ):<span className="text-slate-500 text-xs">-</span>}
-                            </td>
-                            <td className="px-4 py-4">
-                              {item.stochK!=null&&item.stochD!=null?(
-                                <div className={`inline-flex flex-col px-2 py-0.5 rounded-md font-mono text-xs tabular-nums ${zoneBadge(stochZone)}`}>
-                                  <span className="font-bold">K: {item.stochK.toFixed(1)}</span>
-                                  <span className="text-[9px] opacity-70 leading-none mt-0.5">D: {item.stochD.toFixed(1)}</span>
-                                </div>
-                              ):<span className="text-slate-500 text-xs">-</span>}
-                            </td>
-                            <td className="px-4 py-4">
-                              {item.macdHistogram!=null?(()=>{const pos=item.macdHistogram>0;return(
-                                <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-mono text-xs font-bold tabular-nums ${pos?'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300':'bg-rose-500/15 border border-rose-500/30 text-rose-300'}`}>
-                                  <span>{pos?'▲':'▼'}</span><span>{item.macdHistogram.toFixed(1)}</span>
-                                </div>
-                              );})():<span className="text-slate-500 text-xs">-</span>}
-                            </td>
-                            <td className="px-4 py-4 text-right">
-                              <div className="flex justify-end gap-2">
-                                <button onClick={()=>setExpandedTicker(p=>p===item.ticker?null:item.ticker)}
-                                  className={`p-1.5 rounded-md transition-colors border ${isExpanded?'bg-slate-700 text-slate-200 border-slate-600':'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>
-                                  {isExpanded?<X size={16}/>:<BarChart2 size={16}/>}
-                                </button>
-                                <button onClick={()=>ai.runAnalysis(item)} disabled={ai.aiLoading&&ai.aiTicker!==item.ticker}
-                                  className={`p-1.5 rounded-md transition-colors border ${ai.aiTicker===item.ticker?'bg-violet-500/20 text-violet-300 border-violet-500/30':'bg-violet-500/10 text-violet-400 border-violet-500/20 hover:bg-violet-500/20'} disabled:opacity-40`}>
-                                  {ai.aiLoading&&ai.aiTicker===item.ticker?<RefreshCw size={16} className="animate-spin"/>:<Brain size={16}/>}
-                                </button>
-                                <button onClick={()=>wl.removeTicker(item.ticker)} className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-md transition-colors">
-                                  <Trash2 size={16}/>
-                                </button>
-                              </div>
-                            </td>
+                            <td className="px-4 py-4 text-xs font-mono">{(()=>{const{bbUpper,bbLower,price}=item;if(!bbUpper||!bbLower||bbUpper===bbLower)return<span className="text-slate-500">-</span>;const pct=(price-bbLower)/(bbUpper-bbLower);return<div className={`flex flex-col ${pct>1?'text-rose-400':pct<0?'text-emerald-400':'text-slate-300'}`}><span>{(pct*100).toFixed(0)}%</span><span className="text-[10px] opacity-70">{pct>1?'↑ Above':pct<0?'↓ Below':'Inside'}</span></div>;})()}</td>
+                            <td className="px-4 py-4">{item.rsi!=null?(<div className={`inline-flex flex-col items-center px-2 py-0.5 rounded-md font-mono text-xs font-bold tabular-nums ${zoneBadge(rsiZone)}`}><span>{item.rsi.toFixed(1)}</span>{rsiZone!=='neutral'&&<span className="text-[9px] font-normal opacity-80 leading-none mt-0.5">{rsiZone==='oversold'?'OVERSOLD':'OVERBOUGHT'}</span>}</div>):<span className="text-slate-500 text-xs">-</span>}</td>
+                            <td className="px-4 py-4">{item.stochK!=null&&item.stochD!=null?(<div className={`inline-flex flex-col px-2 py-0.5 rounded-md font-mono text-xs tabular-nums ${zoneBadge(stochZone)}`}><span className="font-bold">K: {item.stochK.toFixed(1)}</span><span className="text-[9px] opacity-70 leading-none mt-0.5">D: {item.stochD.toFixed(1)}</span></div>):<span className="text-slate-500 text-xs">-</span>}</td>
+                            <td className="px-4 py-4">{item.macdHistogram!=null?(()=>{const pos=item.macdHistogram>0;return<div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-mono text-xs font-bold tabular-nums ${pos?'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300':'bg-rose-500/15 border border-rose-500/30 text-rose-300'}`}><span>{pos?'▲':'▼'}</span><span>{item.macdHistogram.toFixed(1)}</span></div>;})():<span className="text-slate-500 text-xs">-</span>}</td>
+                            <td className="px-4 py-4 text-right"><div className="flex justify-end gap-2">
+                              <button onClick={()=>setExpandedTicker(p=>p===item.ticker?null:item.ticker)} className={`p-1.5 rounded-md transition-colors border ${isExpanded?'bg-slate-700 text-slate-200 border-slate-600':'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>{isExpanded?<X size={16}/>:<BarChart2 size={16}/>}</button>
+                              <button onClick={()=>ai.runAnalysis(item)} disabled={ai.aiLoading&&ai.aiTicker!==item.ticker} className={`p-1.5 rounded-md transition-colors border ${ai.aiTicker===item.ticker?'bg-violet-500/20 text-violet-300 border-violet-500/30':'bg-violet-500/10 text-violet-400 border-violet-500/20 hover:bg-violet-500/20'} disabled:opacity-40`}>{ai.aiLoading&&ai.aiTicker===item.ticker?<RefreshCw size={16} className="animate-spin"/>:<Brain size={16}/>}</button>
+                              <button onClick={()=>wl.removeTicker(item.ticker)} className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-md transition-colors"><Trash2 size={16}/></button>
+                            </div></td>
                           </tr>
-                          {isExpanded && <tr><td colSpan={14} className="p-0"><ChartView ticker={item.ticker}/></td></tr>}
-                          {ai.aiTicker===item.ticker && (
-                            <tr><td colSpan={14} className="p-0">
-                              <AiPanel ticker={item.ticker} content={ai.aiContent} loading={ai.aiLoading} error={ai.aiError} onClose={ai.closeAi} item={item}/>
-                            </td></tr>
-                          )}
+                          {isExpanded&&<tr><td colSpan={14} className="p-0"><ChartView ticker={item.ticker}/></td></tr>}
+                          {ai.aiTicker===item.ticker&&<tr><td colSpan={14} className="p-0"><AiPanel ticker={item.ticker} content={ai.aiContent} loading={ai.aiLoading} error={ai.aiError} onClose={ai.closeAi} item={item}/></td></tr>}
                         </Fragment>
                       );
                     })}
@@ -442,7 +367,6 @@ export default function Home() {
         </>}
       </main>
 
-      {/* Manage Modal */}
       <ManageModal
         show={wl.showManageModal} manageWatchlists={wl.manageWatchlists} setManageWatchlists={wl.setManageWatchlists}
         activeWatchlistId={wl.activeWatchlistId} setActiveWatchlistId={wl.setActiveWatchlistId}

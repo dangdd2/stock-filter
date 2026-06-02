@@ -61,7 +61,11 @@ function TickerCard({
   const isUp    = (item.changePct ?? 0) >= 0;
   const pctColor = isUp ? 'text-emerald-400' : 'text-rose-400';
   const bgColor  = isUp ? 'bg-emerald-500/5 border-emerald-500/20' : item.changePct === 0 ? 'bg-slate-800/60 border-slate-700/50' : 'bg-rose-500/5 border-rose-500/20';
-  const closes   = item.closes7d && item.closes7d.length >= 2 ? item.closes7d : null;
+  const closes   = item.closes60d && item.closes60d.length >= 2
+    ? item.closes60d
+    : item.closes7d && item.closes7d.length >= 2
+    ? item.closes7d
+    : null;
   const chartH   = gridSize <= 3 ? 90 : gridSize === 4 ? 72 : 60;
   const fs       = gridSize <= 3 ? 'text-sm' : 'text-xs';
 

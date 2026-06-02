@@ -24,6 +24,7 @@ export interface StockIndicatorResult {
   bbMiddle?: number | null;
   bbLower?: number | null;
   closes7d?: number[];
+  closes60d?: number[];
   change?: number | null;
   changePct?: number | null;
   change1w?: number | null;

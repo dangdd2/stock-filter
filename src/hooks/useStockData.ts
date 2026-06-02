@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import React from 'react';
 import { type StockIndicatorResult, type Watchlist, MASTER_ID } from '@/types';
 import { loadSignalHistory, saveSignalHistory, addNewSignals, fillSignalPrices, type SignalLog, type SignalInput } from '@/lib/signalHistory';
+import { loadAlerts, saveAlerts, detectAlerts, type SmartAlert } from '@/lib/smartAlerts';
 
 export function useStockData(
   activeWatchlist: Watchlist | undefined,
@@ -18,10 +19,14 @@ export function useStockData(
   const [masterLoading, setMasterLoading] = useState(false);
   const [lastUpdated,   setLastUpdated]   = useState<Date | null>(null);
   const [signalHistory, setSignalHistory] = useState<SignalLog[]>([]);
+  const [smartAlerts,   setSmartAlerts]   = useState<SmartAlert[]>([]);
   // Keep a ref to always have latest masterData prices for fillSignalPrices
   const masterPriceMapRef = React.useRef<Map<string, number>>(new Map());
 
-  useEffect(() => { setSignalHistory(loadSignalHistory()); }, []);
+  useEffect(() => {
+    setSignalHistory(loadSignalHistory());
+    setSmartAlerts(loadAlerts());
+  }, []);
 
   // Update master price map whenever masterData changes
   useEffect(() => {
@@ -67,6 +72,32 @@ export function useStockData(
         saveSignalHistory(updated);
         return updated;
       });
+
+      // ── Smart Alert detection ──────────────────────────────
+      setSmartAlerts(prev => {
+        const newAlerts = detectAlerts(json, prev);
+        if (!newAlerts.length) return prev;
+        const merged = [...prev, ...newAlerts];
+        saveAlerts(merged);
+        // Browser notification for high-priority alerts
+        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+          newAlerts
+            .filter(a => {
+              const cfg = (smartAlerts: typeof prev) => import('@/lib/smartAlerts').then(m => m.ALERT_CONFIG[a.type]);
+              return true; // fire all for now, config checked in component
+            })
+            .slice(0, 3) // max 3 notifications per refresh
+            .forEach(a => {
+              const { ALERT_CONFIG: cfg } = require('@/lib/smartAlerts');
+              const c = cfg[a.type];
+              new Notification(`${c.emoji} ${a.ticker} — ${c.label}`, {
+                body: `${c.description}\nGiá: ${a.price.toLocaleString()} VND`,
+                icon: '/favicon.ico',
+              });
+            });
+        }
+        return merged;
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally { setLoading(false); }
@@ -107,6 +138,7 @@ export function useStockData(
     data, loading, error,
     masterData, masterLoading,
     lastUpdated, signalHistory, setSignalHistory,
+    smartAlerts, setSmartAlerts,
     fetchData,
   };
 }

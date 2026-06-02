@@ -6,7 +6,8 @@ import Link from 'next/link';
 import {
   Activity, TrendingUp, TrendingDown, Filter, AlertCircle, RefreshCw,
   BarChart2, X, Plus, Trash2, Brain, GripVertical, Settings2, EyeOff,
-  History, Map as MapIcon, SlidersHorizontal, HelpCircle, MoreVertical, RefreshCcw,
+  History, Map as MapIcon, SlidersHorizontal, HelpCircle, MoreVertical,
+  RefreshCcw, Bell,
 } from 'lucide-react';
 
 // ── Types ──────────────────────────────────────────────────────
@@ -19,7 +20,8 @@ import { useStockData }  from '@/hooks/useStockData';
 import { useAiAnalysis } from '@/hooks/useAiAnalysis';
 
 // ── Lib ────────────────────────────────────────────────────────
-import { clearSignalHistory }     from '@/lib/signalHistory';
+import { clearSignalHistory } from '@/lib/signalHistory';
+import { saveAlerts, clearAlerts } from '@/lib/smartAlerts';
 
 // ── Components ─────────────────────────────────────────────────
 import SignalHistoryPanel from '@/components/SignalHistoryPanel';
@@ -30,8 +32,9 @@ import ManageModal        from '@/components/watchlist/ManageModal';
 import ChartView          from '@/components/ChartView';
 import AiPanel            from '@/components/AiPanel';
 import Sparkline          from '@/components/Sparkline';
+import SmartAlertsPanel   from '@/components/SmartAlertsPanel';
 
-type ActiveTab = 'watchlist' | 'history' | 'heatmap' | 'screener';
+type ActiveTab = 'watchlist' | 'history' | 'heatmap' | 'screener' | 'alerts';
 
 export default function Home() {
   // ── Custom hooks ───────────────────────────────────────────
@@ -151,6 +154,7 @@ export default function Home() {
           {([
             { id: 'watchlist' as ActiveTab, label: 'Watchlist', icon: <BarChart2 size={14}/>,          cls: 'blue'   },
             { id: 'history'   as ActiveTab, label: 'Lịch Sử',   icon: <History size={14}/>,             cls: 'violet', badge: sd.signalHistory.length },
+            { id: 'alerts'    as ActiveTab, label: 'Alerts',    icon: <Bell size={14}/>,                cls: 'amber',  badge: sd.smartAlerts.filter(a => !a.dismissed && !a.read).length },
             { id: 'heatmap'   as ActiveTab, label: 'Heatmap',   icon: <MapIcon size={14}/>,             cls: 'emerald' },
             { id: 'screener'  as ActiveTab, label: 'Screener',  icon: <SlidersHorizontal size={14}/>,   cls: 'amber'  },
           ]).map(tab => (
@@ -170,6 +174,31 @@ export default function Home() {
 
         {/* Market Status Bar */}
         <MarketStatusBar loading={sd.loading} lastUpdated={sd.lastUpdated} onRefresh={sd.fetchData}/>
+
+        {/* Alerts Tab */}
+        {activeTab === 'alerts' && (
+          <SmartAlertsPanel
+            alerts={sd.smartAlerts}
+            onMarkAllRead={() => {
+              const updated = sd.smartAlerts.map(a => ({ ...a, read: true }));
+              sd.setSmartAlerts(updated);
+              saveAlerts(updated);
+            }}
+            onDismiss={(id) => {
+              const updated = sd.smartAlerts.map(a => a.id === id ? { ...a, dismissed: true } : a);
+              sd.setSmartAlerts(updated);
+              saveAlerts(updated);
+            }}
+            onClear={() => {
+              clearAlerts();
+              sd.setSmartAlerts([]);
+            }}
+            onTickerClick={(ticker) => {
+              setActiveTab('watchlist');
+              handleSignalTickerClick(ticker);
+            }}
+          />
+        )}
 
         {/* History Tab */}
         {activeTab === 'history' && (

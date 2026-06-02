@@ -27,6 +27,7 @@ export interface StockIndicatorResult {
   // Last 7 daily closes for sparkline
   closes7d?: number[];
   closes60d?: number[];
+  closes6m?: number[];
   // Day change
   change?: number | null;
   changePct?: number | null;
@@ -210,6 +211,7 @@ export async function fetchStockData(ticker: string): Promise<StockIndicatorResu
       bbLower: lastBb?.lower ?? null,
       closes7d: closePrices.slice(-7),
       closes60d: closePrices.slice(-60),
+      closes6m: closePrices,
       change: closePrices.length >= 2 ? closePrices[closePrices.length - 1] - closePrices[closePrices.length - 2] : null,
       changePct: closePrices.length >= 2 ? ((closePrices[closePrices.length - 1] - closePrices[closePrices.length - 2]) / closePrices[closePrices.length - 2]) * 100 : null,
       change1w, change1m, change3m, change6m,

@@ -28,10 +28,11 @@ import ManageModal        from '@/components/watchlist/ManageModal';
 import ChartView          from '@/components/ChartView';
 import AiPanel            from '@/components/AiPanel';
 import Sparkline          from '@/components/Sparkline';
-import SmartAlertsPanel   from '@/components/SmartAlertsPanel';
-import MultiChart         from '@/components/MultiChart';
+import SmartAlertsPanel         from '@/components/SmartAlertsPanel';
+import MultiChart               from '@/components/MultiChart';
+import PatternRecognitionPanel  from '@/components/PatternRecognitionPanel';
 
-type ActiveTab = 'watchlist' | 'history' | 'heatmap' | 'screener' | 'alerts' | 'multicharts';
+type ActiveTab = 'watchlist' | 'history' | 'heatmap' | 'screener' | 'alerts' | 'multicharts' | 'patterns';
 
 export default function Home() {
   const wl = useWatchlists();
@@ -141,6 +142,7 @@ export default function Home() {
           {([
             { id: 'watchlist'   as ActiveTab, label: 'Watchlist',   icon: <BarChart2 size={14}/>,        cls: 'blue'    },
             { id: 'multicharts' as ActiveTab, label: 'Multi Chart', icon: <LayoutGrid size={14}/>,       cls: 'cyan'    },
+            { id: 'patterns'    as ActiveTab, label: 'Patterns',    icon: <SlidersHorizontal size={14}/>,cls: 'violet'  },
             { id: 'history'     as ActiveTab, label: 'Lịch Sử',     icon: <History size={14}/>,           cls: 'violet', badge: sd.signalHistory.length },
             { id: 'alerts'      as ActiveTab, label: 'Alerts',      icon: <Bell size={14}/>,              cls: 'amber',  badge: unreadAlerts || undefined },
             { id: 'heatmap'     as ActiveTab, label: 'Heatmap',     icon: <MapIcon size={14}/>,           cls: 'emerald' },
@@ -160,6 +162,14 @@ export default function Home() {
 
       <main className="w-full px-4 py-4 space-y-3">
         <MarketStatusBar loading={sd.loading} lastUpdated={sd.lastUpdated} onRefresh={sd.fetchData}/>
+
+        {/* Patterns */}
+        {activeTab === 'patterns' && (
+          <PatternRecognitionPanel
+            data={allData}
+            onTickerClick={t => { setActiveTab('watchlist'); handleSignalTickerClick(t); }}
+          />
+        )}
 
         {/* Multi Chart */}
         {activeTab === 'multicharts' && (

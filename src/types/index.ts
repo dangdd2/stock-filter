@@ -26,6 +26,8 @@ export interface StockIndicatorResult {
   closes7d?: number[];
   closes60d?: number[];
   closes6m?: number[];
+  highs6m?: number[];
+  lows6m?: number[];
   change?: number | null;
   changePct?: number | null;
   change1w?: number | null;

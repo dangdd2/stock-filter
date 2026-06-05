@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Brain, X, TrendingUp, RefreshCw, BarChart2 } from 'lucide-react';
 import { type StockIndicatorResult } from '@/types';
+import NewsPanel from '@/components/NewsPanel';
 
 const REC_CONFIG: Record<string, { label: string; className: string }> = {
   BUY:        { label: 'BUY',        className: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
@@ -335,6 +336,9 @@ export default function AiPanel({
           );
         })()}
       </div>
+
+      {/* News */}
+      <NewsPanel ticker={ticker} />
     </div>
   );
 }

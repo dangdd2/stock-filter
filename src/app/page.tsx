@@ -7,7 +7,7 @@ import {
   Activity, TrendingUp, TrendingDown, Filter, AlertCircle, RefreshCw,
   BarChart2, X, Plus, Trash2, Brain, GripVertical, Settings2, EyeOff,
   History, Map as MapIcon, SlidersHorizontal, HelpCircle, MoreVertical,
-  RefreshCcw, Bell, LayoutGrid,
+  RefreshCcw, Bell, LayoutGrid, Layers,
 } from 'lucide-react';
 
 import { type RsiFilter, type MacdFilter, type StochFilter, MASTER_ID } from '@/types';
@@ -31,8 +31,9 @@ import Sparkline          from '@/components/Sparkline';
 import SmartAlertsPanel         from '@/components/SmartAlertsPanel';
 import MultiChart               from '@/components/MultiChart';
 import PatternRecognitionPanel  from '@/components/PatternRecognitionPanel';
+import MultiTimeframePanel      from '@/components/MultiTimeframePanel';
 
-type ActiveTab = 'watchlist' | 'history' | 'heatmap' | 'screener' | 'alerts' | 'multicharts' | 'patterns';
+type ActiveTab = 'watchlist' | 'history' | 'heatmap' | 'screener' | 'alerts' | 'multicharts' | 'patterns' | 'mtf';
 
 export default function Home() {
   const wl = useWatchlists();
@@ -142,6 +143,7 @@ export default function Home() {
           {([
             { id: 'watchlist'   as ActiveTab, label: 'Watchlist',   icon: <BarChart2 size={14}/>,        cls: 'blue'    },
             { id: 'multicharts' as ActiveTab, label: 'Multi Chart', icon: <LayoutGrid size={14}/>,       cls: 'cyan'    },
+            { id: 'mtf'         as ActiveTab, label: 'MTF',          icon: <Layers size={14}/>,            cls: 'indigo'  },
             { id: 'patterns'    as ActiveTab, label: 'Patterns',    icon: <SlidersHorizontal size={14}/>,cls: 'violet'  },
             { id: 'history'     as ActiveTab, label: 'Lịch Sử',     icon: <History size={14}/>,           cls: 'violet', badge: sd.signalHistory.length },
             { id: 'alerts'      as ActiveTab, label: 'Alerts',      icon: <Bell size={14}/>,              cls: 'amber',  badge: unreadAlerts || undefined },
@@ -167,6 +169,14 @@ export default function Home() {
         {activeTab === 'patterns' && (
           <PatternRecognitionPanel
             data={allData}
+            onTickerClick={t => { setActiveTab('watchlist'); handleSignalTickerClick(t); }}
+          />
+        )}
+
+        {/* Multi-Timeframe */}
+        {activeTab === 'mtf' && (
+          <MultiTimeframePanel
+            tickers={wl.activeWatchlist?.tickers ?? []}
             onTickerClick={t => { setActiveTab('watchlist'); handleSignalTickerClick(t); }}
           />
         )}

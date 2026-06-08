@@ -1,8 +1,11 @@
 "use client";
 import { useEffect, useState } from 'react';
-import { Brain, X, TrendingUp, RefreshCw, BarChart2 } from 'lucide-react';
+import { Brain, X, TrendingUp, RefreshCw, BarChart2, Target, Newspaper } from 'lucide-react';
 import { type StockIndicatorResult } from '@/types';
 import NewsPanel from '@/components/NewsPanel';
+import EntryExitPanel from '@/components/EntryExitPanel';
+
+type AiTab = 'analysis' | 'entryexit' | 'news';
 
 const REC_CONFIG: Record<string, { label: string; className: string }> = {
   BUY:        { label: 'BUY',        className: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
@@ -25,6 +28,7 @@ export default function AiPanel({
   onClose: () => void;
   item: StockIndicatorResult;
 }) {
+  const [aiTab, setAiTab] = useState<AiTab>('analysis');
   const [financials, setFinancials] = useState<FinancialsData | null>(null);
   const [finLoading, setFinLoading] = useState(false);
   const [finError, setFinError] = useState<string | null>(null);
@@ -116,7 +120,39 @@ export default function AiPanel({
         </button>
       </div>
 
-      {/* AI content */}
+      {/* Tab bar */}
+      <div className="flex gap-1 mb-5 bg-slate-800/60 rounded-lg p-1 border border-slate-700/40">
+        {([
+          { id: 'analysis' as AiTab, label: 'Phân Tích AI', icon: <Brain size={13} /> },
+          { id: 'entryexit' as AiTab, label: 'Vào / Ra', icon: <Target size={13} /> },
+          { id: 'news' as AiTab, label: 'Tin Tức', icon: <Newspaper size={13} /> },
+        ] as { id: AiTab; label: string; icon: React.ReactNode }[]).map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setAiTab(tab.id)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex-1 justify-center ${
+              aiTab === tab.id
+                ? 'bg-violet-500/20 text-violet-300 shadow-sm'
+                : 'text-slate-400 hover:text-slate-300'
+            }`}
+          >
+            {tab.icon} {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Entry/Exit tab */}
+      {aiTab === 'entryexit' && (
+        <EntryExitPanel item={item} />
+      )}
+
+      {/* News tab */}
+      {aiTab === 'news' && (
+        <NewsPanel ticker={ticker} />
+      )}
+
+      {/* Analysis tab content */}
+      {aiTab === 'analysis' && (<>
       {error && (
         <div className="text-rose-400 text-sm bg-rose-500/10 border border-rose-500/20 rounded-lg p-3 mb-6">
           {error}
@@ -337,8 +373,7 @@ export default function AiPanel({
         })()}
       </div>
 
-      {/* News */}
-      <NewsPanel ticker={ticker} />
+      </>)}
     </div>
   );
 }

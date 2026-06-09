@@ -7,7 +7,7 @@ import {
   Activity, TrendingUp, TrendingDown, Filter, AlertCircle, RefreshCw,
   BarChart2, X, Plus, Trash2, Brain, GripVertical, Settings2, EyeOff,
   History, Map as MapIcon, SlidersHorizontal, HelpCircle, MoreVertical,
-  RefreshCcw, Bell, LayoutGrid, Layers, GitFork,
+  RefreshCcw, Bell, LayoutGrid, Layers, GitFork, Columns2,
 } from 'lucide-react';
 
 import { type RsiFilter, type MacdFilter, type StochFilter, MASTER_ID } from '@/types';
@@ -33,8 +33,9 @@ import MultiChart               from '@/components/MultiChart';
 import PatternRecognitionPanel  from '@/components/PatternRecognitionPanel';
 import MultiTimeframePanel      from '@/components/MultiTimeframePanel';
 import CorrelationMatrix         from '@/components/CorrelationMatrix';
+import ComparisonTool            from '@/components/ComparisonTool';
 
-type ActiveTab = 'watchlist' | 'history' | 'heatmap' | 'screener' | 'alerts' | 'multicharts' | 'patterns' | 'mtf' | 'correlation';
+type ActiveTab = 'watchlist' | 'history' | 'heatmap' | 'screener' | 'alerts' | 'multicharts' | 'patterns' | 'mtf' | 'correlation' | 'compare';
 
 export default function Home() {
   const wl = useWatchlists();
@@ -146,6 +147,7 @@ export default function Home() {
             { id: 'multicharts' as ActiveTab, label: 'Multi Chart', icon: <LayoutGrid size={14}/>,       cls: 'cyan'    },
             { id: 'mtf'         as ActiveTab, label: 'MTF',          icon: <Layers size={14}/>,            cls: 'indigo'  },
             { id: 'correlation' as ActiveTab, label: 'Correlation',  icon: <GitFork size={14}/>,           cls: 'teal'    },
+            { id: 'compare'     as ActiveTab, label: 'So sánh',      icon: <Columns2 size={14}/>,          cls: 'sky'     },
             { id: 'patterns'    as ActiveTab, label: 'Patterns',    icon: <SlidersHorizontal size={14}/>,cls: 'violet'  },
             { id: 'history'     as ActiveTab, label: 'Lịch Sử',     icon: <History size={14}/>,           cls: 'violet', badge: sd.signalHistory.length },
             { id: 'alerts'      as ActiveTab, label: 'Alerts',      icon: <Bell size={14}/>,              cls: 'amber',  badge: unreadAlerts || undefined },
@@ -186,6 +188,14 @@ export default function Home() {
         {/* Correlation Matrix */}
         {activeTab === 'correlation' && (
           <CorrelationMatrix
+            tickers={wl.activeWatchlist?.tickers ?? []}
+            onTickerClick={t => { setActiveTab('watchlist'); handleSignalTickerClick(t); }}
+          />
+        )}
+
+        {/* Comparison Tool */}
+        {activeTab === 'compare' && (
+          <ComparisonTool
             tickers={wl.activeWatchlist?.tickers ?? []}
             onTickerClick={t => { setActiveTab('watchlist'); handleSignalTickerClick(t); }}
           />

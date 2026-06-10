@@ -7,7 +7,7 @@ import {
   Activity, TrendingUp, TrendingDown, Filter, AlertCircle, RefreshCw,
   BarChart2, X, Plus, Trash2, Brain, GripVertical, Settings2, EyeOff,
   History, Map as MapIcon, SlidersHorizontal, HelpCircle, MoreVertical,
-  RefreshCcw, Bell, LayoutGrid, Layers, GitFork, Columns2, PieChart,
+  RefreshCcw, Bell, LayoutGrid, Layers, GitFork, Columns2, PieChart, MessageSquare,
 } from 'lucide-react';
 
 import { type RsiFilter, type MacdFilter, type StochFilter, MASTER_ID } from '@/types';
@@ -35,8 +35,9 @@ import MultiTimeframePanel      from '@/components/MultiTimeframePanel';
 import CorrelationMatrix         from '@/components/CorrelationMatrix';
 import ComparisonTool            from '@/components/ComparisonTool';
 import SectorAnalysis            from '@/components/SectorAnalysis';
+import AiChatPanel               from '@/components/AiChatPanel';
 
-type ActiveTab = 'watchlist' | 'history' | 'heatmap' | 'screener' | 'alerts' | 'multicharts' | 'patterns' | 'mtf' | 'correlation' | 'compare' | 'sector';
+type ActiveTab = 'watchlist' | 'history' | 'heatmap' | 'screener' | 'alerts' | 'multicharts' | 'patterns' | 'mtf' | 'correlation' | 'compare' | 'sector' | 'aichat';
 
 export default function Home() {
   const wl = useWatchlists();
@@ -145,6 +146,7 @@ export default function Home() {
         <div className="flex rounded-lg overflow-hidden border border-slate-700 text-sm">
           {([
             { id: 'watchlist'   as ActiveTab, label: 'Watchlist',   icon: <BarChart2 size={14}/>,        cls: 'blue'    },
+            { id: 'aichat'      as ActiveTab, label: 'AI Chat',      icon: <MessageSquare size={14}/>,    cls: 'emerald' },
             { id: 'multicharts' as ActiveTab, label: 'Multi Chart', icon: <LayoutGrid size={14}/>,       cls: 'cyan'    },
             { id: 'mtf'         as ActiveTab, label: 'MTF',          icon: <Layers size={14}/>,            cls: 'indigo'  },
             { id: 'correlation' as ActiveTab, label: 'Correlation',  icon: <GitFork size={14}/>,           cls: 'teal'    },
@@ -207,6 +209,14 @@ export default function Home() {
         {activeTab === 'sector' && (
           <SectorAnalysis
             onTickerClick={t => { setActiveTab('watchlist'); handleSignalTickerClick(t); }}
+          />
+        )}
+
+        {/* AI Chat with live context */}
+        {activeTab === 'aichat' && (
+          <AiChatPanel
+            watchlistTickers={wl.activeWatchlist?.tickers ?? []}
+            activeTicker={expandedTicker ?? undefined}
           />
         )}
 

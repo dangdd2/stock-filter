@@ -62,43 +62,66 @@ interface CellProps {
 const CustomCell = ({ x, y, width, height, name, ticker, changePct, price, sectorColor, onTickerClick }: CellProps) => {
   const _x = x ?? 0; const _y = y ?? 0;
   const _w = width ?? 0; const _h = height ?? 0;
-  if (_w < 10 || _h < 10) return null;
+  if (_w < 8 || _h < 8) return null;
   const bg = changePctBg(changePct);
   const tc = changePctText(changePct);
-  const pctLabel = changePct != null ? `${changePct > 0 ? '+' : ''}${changePct.toFixed(2)}%` : '';
-  const fs = _w < 52 ? 9 : _w < 80 ? 10 : 11;
-  const showPct   = _w > 32 && _h > 28;
-  const showPrice = _h > 44 && _w > 48;
+  const isUp   = changePct != null && changePct > 0;
+  const isDown = changePct != null && changePct < 0;
+  const pctLabel = changePct != null ? `${isUp ? '+' : ''}${changePct.toFixed(2)}%` : '';
+
+  // Adaptive font sizes based on cell dimensions
+  const tickerFs = _w < 40 ? 8 : _w < 65 ? 10 : _w < 100 ? 12 : 14;
+  const pctFs    = _w < 40 ? 7 : _w < 65 ? 9  : _w < 100 ? 10 : 12;
+  const priceFs  = _w < 65 ? 7 : 9;
+
+  const showTicker = _w > 18 && _h > 14;
+  const showPct    = _w > 28 && _h > 26;
+  const showPrice  = _h > 52 && _w > 56;
+
+  // Layout: center everything vertically
+  const totalLines = (showTicker ? 1 : 0) + (showPct ? 1 : 0) + (showPrice ? 1 : 0);
+  const lineH = totalLines > 2 ? 14 : 12;
+  const startY = _y + _h / 2 - ((totalLines - 1) * lineH) / 2;
+  let lineIdx = 0;
+
+  // Glow border for large movers
+  const glowColor = changePct != null && changePct > 3 ? '#22c55e'
+                  : changePct != null && changePct < -3 ? '#ef4444' : null;
+
   return (
     <g onClick={() => ticker && onTickerClick?.(ticker)} style={{ cursor: ticker ? 'pointer' : 'default' }}>
-      <rect x={_x+1} y={_y+1} width={_w-2} height={_h-2} rx={4} fill={bg} />
-      {sectorColor && _w > 20 && (
-        <rect x={_x+1} y={_y+1} width={Math.min(_w-2, 3)} height={_h-2} rx={2} fill={sectorColor} fillOpacity={0.8} />
+      {/* Background */}
+      <rect x={_x+1} y={_y+1} width={_w-2} height={_h-2} rx={3} fill={bg} />
+      {/* Glow border for big movers */}
+      {glowColor && <rect x={_x+1} y={_y+1} width={_w-2} height={_h-2} rx={3} fill="none" stroke={glowColor} strokeWidth={1.5} strokeOpacity={0.6} />}
+      {/* Top accent bar — sector color */}
+      {sectorColor && _w > 16 && (
+        <rect x={_x+1} y={_y+1} width={_w-2} height={2} rx={1} fill={sectorColor} fillOpacity={0.9} />
       )}
-      {_w > 24 && _h > 18 && (
-        <text x={_x+_w/2} y={_y+_h/2-(showPct?(showPrice?10:6):0)}
-          textAnchor="middle" dominantBaseline="middle"
-          fill="#f1f5f9" fontSize={fs} fontWeight="700"
-          style={{ pointerEvents:'none', fontFamily:'monospace' }}>
+      {/* Ticker */}
+      {showTicker && (() => { const ly = startY + lineIdx++ * lineH; return (
+        <text x={_x+_w/2} y={ly} textAnchor="middle" dominantBaseline="middle"
+          fill="#f8fafc" fontSize={tickerFs} fontWeight="800"
+          style={{ pointerEvents:'none', fontFamily:'ui-monospace,monospace', letterSpacing: '0.02em' }}>
           {name}
         </text>
-      )}
-      {showPct && (
-        <text x={_x+_w/2} y={_y+_h/2+(showPrice?4:8)}
-          textAnchor="middle" dominantBaseline="middle"
-          fill={tc} fontSize={fs-1} fontWeight="600"
+      ); })()}
+      {/* % change — prominent */}
+      {showPct && (() => { const ly = startY + lineIdx++ * lineH; return (
+        <text x={_x+_w/2} y={ly} textAnchor="middle" dominantBaseline="middle"
+          fill={tc} fontSize={pctFs} fontWeight="700"
           style={{ pointerEvents:'none' }}>
           {pctLabel}
         </text>
-      )}
-      {showPrice && (
-        <text x={_x+_w/2} y={_y+_h/2+16}
-          textAnchor="middle" dominantBaseline="middle"
-          fill="#64748b" fontSize={fs-2}
+      ); })()}
+      {/* Price */}
+      {showPrice && (() => { const ly = startY + lineIdx++ * lineH; return (
+        <text x={_x+_w/2} y={ly} textAnchor="middle" dominantBaseline="middle"
+          fill={isUp ? '#6ee7b7' : isDown ? '#fca5a5' : '#94a3b8'} fontSize={priceFs} fontWeight="500"
           style={{ pointerEvents:'none' }}>
-          {price?.toLocaleString()}
+          {price?.toLocaleString('vi-VN')}
         </text>
-      )}
+      ); })()}
     </g>
   );
 };
@@ -148,7 +171,7 @@ type SizeMode  = 'marketcap' | 'volume' | 'equal';
 type GroupMode = 'sector' | 'flat';
 
 export default function MarketHeatmap({ data, watchlists, onTickerClick }: Props) {
-  const [sizeMode,  setSizeMode]  = useState<SizeMode>('equal');
+  const [sizeMode,  setSizeMode]  = useState<SizeMode>('marketcap');
   const [groupMode, setGroupMode] = useState<GroupMode>('sector');
 
   const validData = useMemo(() => data.filter(d => !d.error && d.price > 0), [data]);
@@ -289,7 +312,7 @@ export default function MarketHeatmap({ data, watchlists, onTickerClick }: Props
           </div>
         )}
 
-        <div style={{ height: 520 }} className="p-1">
+        <div style={{ height: 620 }} className="p-1">
           <ResponsiveContainer width="100%" height="100%">
             <Treemap data={treeData} dataKey="size" nameKey="name" isAnimationActive={false}
               content={(props) => {
@@ -329,13 +352,13 @@ export default function MarketHeatmap({ data, watchlists, onTickerClick }: Props
         <div className="flex items-center justify-center gap-2 px-4 pb-3 pt-1 flex-wrap">
           <span className="text-[10px] text-slate-600">% thay đổi:</span>
           {([
-            { label:'>+4%',   bg:'#064e3b', tc:'#6ee7b7' },
-            { label:'+2→4%',  bg:'#065f46', tc:'#6ee7b7' },
-            { label:'0→+2%',  bg:'#047857', tc:'#6ee7b7' },
+            { label:'>+6%',   bg:'#14532d', tc:'#bbf7d0' },
+            { label:'+3→6%',  bg:'#15803d', tc:'#bbf7d0' },
+            { label:'0→+3%',  bg:'#16a34a', tc:'#bbf7d0' },
             { label:'~0%',    bg:'#1e293b', tc:'#94a3b8' },
-            { label:'0→-2%',  bg:'#7f1d1d', tc:'#fca5a5' },
-            { label:'-2→-4%', bg:'#991b1b', tc:'#fca5a5' },
-            { label:'<-4%',   bg:'#450a0a', tc:'#fca5a5' },
+            { label:'0→-3%',  bg:'#b91c1c', tc:'#fecaca' },
+            { label:'-3→-6%', bg:'#dc2626', tc:'#fecaca' },
+            { label:'<-6%',   bg:'#991b1b', tc:'#fecaca' },
           ]).map(({ label, bg, tc }) => (
             <div key={label} className="flex items-center gap-1">
               <span className="w-6 h-3 rounded-sm" style={{ backgroundColor: bg }} />

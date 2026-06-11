@@ -7,7 +7,7 @@ import {
   Activity, TrendingUp, TrendingDown, Filter, AlertCircle, RefreshCw,
   BarChart2, X, Plus, Trash2, Brain, GripVertical, Settings2, EyeOff,
   History, Map as MapIcon, SlidersHorizontal, HelpCircle, MoreVertical,
-  RefreshCcw, Bell, LayoutGrid, Layers, GitFork, Columns2, PieChart, MessageSquare,
+  RefreshCcw, Bell, LayoutGrid, Layers, GitFork, Columns2, PieChart, MessageSquare, UserSearch, ChevronDown,
 } from 'lucide-react';
 
 import { type RsiFilter, type MacdFilter, type StochFilter, MASTER_ID } from '@/types';
@@ -143,29 +143,68 @@ export default function Home() {
             <p className="text-xs text-slate-400">Custom Watchlists & Technical Indicators</p>
           </div>
         </div>
-        <div className="flex rounded-lg overflow-hidden border border-slate-700 text-sm">
+        <div className="flex items-center gap-1 flex-wrap">
+          {/* ── Primary tabs ── */}
           {([
-            { id: 'watchlist'   as ActiveTab, label: 'Watchlist',   icon: <BarChart2 size={14}/>,        cls: 'blue'    },
-            { id: 'aichat'      as ActiveTab, label: 'AI Chat',      icon: <MessageSquare size={14}/>,    cls: 'emerald' },
-            { id: 'multicharts' as ActiveTab, label: 'Multi Chart', icon: <LayoutGrid size={14}/>,       cls: 'cyan'    },
-            { id: 'mtf'         as ActiveTab, label: 'MTF',          icon: <Layers size={14}/>,            cls: 'indigo'  },
-            { id: 'correlation' as ActiveTab, label: 'Correlation',  icon: <GitFork size={14}/>,           cls: 'teal'    },
-            { id: 'compare'     as ActiveTab, label: 'So sánh',      icon: <Columns2 size={14}/>,          cls: 'sky'     },
-            { id: 'sector'      as ActiveTab, label: 'Ngành',         icon: <PieChart size={14}/>,          cls: 'orange'  },
-            { id: 'patterns'    as ActiveTab, label: 'Patterns',    icon: <SlidersHorizontal size={14}/>,cls: 'violet'  },
-            { id: 'history'     as ActiveTab, label: 'Lịch Sử',     icon: <History size={14}/>,           cls: 'violet', badge: sd.signalHistory.length },
-            { id: 'alerts'      as ActiveTab, label: 'Alerts',      icon: <Bell size={14}/>,              cls: 'amber',  badge: unreadAlerts || undefined },
-            { id: 'heatmap'     as ActiveTab, label: 'Heatmap',     icon: <MapIcon size={14}/>,           cls: 'emerald' },
-            { id: 'screener'    as ActiveTab, label: 'Screener',    icon: <SlidersHorizontal size={14}/>, cls: 'amber'   },
+            { id: 'watchlist'   as ActiveTab, label: 'Watchlist',  icon: <BarChart2 size={13}/>,      cls: 'blue'    },
+            { id: 'aichat'      as ActiveTab, label: 'AI Chat',    icon: <MessageSquare size={13}/>,  cls: 'emerald' },
+            { id: 'sector'      as ActiveTab, label: 'Ngành',      icon: <PieChart size={13}/>,       cls: 'orange'  },
+            { id: 'insider'     as ActiveTab, label: 'Insider',    icon: <UserSearch size={13}/>,     cls: 'rose'    },
+            { id: 'compare'     as ActiveTab, label: 'So sánh',    icon: <Columns2 size={13}/>,       cls: 'sky'     },
+            { id: 'screener'    as ActiveTab, label: 'Screener',   icon: <SlidersHorizontal size={13}/>, cls: 'amber' },
+            { id: 'heatmap'     as ActiveTab, label: 'Heatmap',    icon: <MapIcon size={13}/>,        cls: 'emerald' },
+            { id: 'alerts'      as ActiveTab, label: 'Alerts',     icon: <Bell size={13}/>,           cls: 'amber',  badge: unreadAlerts || undefined },
           ]).map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 transition-colors ${activeTab === tab.id ? `bg-${tab.cls}-500/20 text-${tab.cls}-300 font-semibold` : 'text-slate-400 hover:bg-slate-700'}`}>
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors whitespace-nowrap border ${
+                activeTab === tab.id
+                  ? `bg-${tab.cls}-500/20 text-${tab.cls}-300 border-${tab.cls}-500/30 font-semibold`
+                  : 'text-slate-400 hover:bg-slate-700 border-transparent'
+              }`}>
               {tab.icon} {tab.label}
-              {tab.badge ? <span className={`ml-1 px-1.5 py-0.5 bg-${tab.cls}-500/30 text-${tab.cls}-300 rounded-full text-[10px] font-bold leading-none`}>{tab.badge}</span> : null}
+              {tab.badge ? <span className={`px-1.5 py-0.5 bg-${tab.cls}-500/30 text-${tab.cls}-300 rounded-full text-[10px] font-bold leading-none`}>{tab.badge}</span> : null}
             </button>
           ))}
-          <Link href="/guide" className="flex items-center gap-2 px-4 py-2 transition-colors text-slate-400 hover:bg-slate-700 border-l border-slate-700">
-            <HelpCircle size={14}/> Hướng dẫn
+
+          {/* ── More dropdown ── */}
+          {(() => {
+            const moreTabs = [
+              { id: 'mtf'         as ActiveTab, label: 'MTF',          icon: <Layers size={13}/>,            cls: 'indigo'  },
+              { id: 'correlation' as ActiveTab, label: 'Correlation',  icon: <GitFork size={13}/>,           cls: 'teal'    },
+              { id: 'multicharts' as ActiveTab, label: 'Multi Chart',  icon: <LayoutGrid size={13}/>,        cls: 'cyan'    },
+              { id: 'patterns'    as ActiveTab, label: 'Patterns',     icon: <SlidersHorizontal size={13}/>, cls: 'violet'  },
+              { id: 'history'     as ActiveTab, label: 'Lịch sử',      icon: <History size={13}/>,           cls: 'violet', badge: sd.signalHistory.length },
+            ];
+            const activeInMore = moreTabs.find(t => t.id === activeTab);
+            return (
+              <div className="relative group">
+                <button className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors whitespace-nowrap border ${
+                  activeInMore
+                    ? `bg-${activeInMore.cls}-500/20 text-${activeInMore.cls}-300 border-${activeInMore.cls}-500/30 font-semibold`
+                    : 'text-slate-400 hover:bg-slate-700 border-transparent'
+                }`}>
+                  {activeInMore ? <>{activeInMore.icon} {activeInMore.label}</> : <><MoreVertical size={13}/> Thêm</>}
+                  <ChevronDown size={11} />
+                </button>
+                <div className="absolute right-0 top-full mt-1 w-44 bg-slate-900 border border-slate-700 rounded-xl shadow-xl z-50 py-1 hidden group-hover:block">
+                  {moreTabs.map(tab => (
+                    <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors ${
+                        activeTab === tab.id
+                          ? `bg-${tab.cls}-500/20 text-${tab.cls}-300 font-semibold`
+                          : 'text-slate-400 hover:bg-slate-800'
+                      }`}>
+                      {tab.icon} {tab.label}
+                      {tab.badge ? <span className="ml-auto px-1.5 py-0.5 bg-slate-700 text-slate-300 rounded-full text-[10px] font-bold">{tab.badge}</span> : null}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          <Link href="/guide" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-slate-500 hover:bg-slate-700 hover:text-slate-300 transition-colors border border-transparent whitespace-nowrap">
+            <HelpCircle size={13}/> Guide
           </Link>
         </div>
       </header>

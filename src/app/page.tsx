@@ -36,8 +36,9 @@ import CorrelationMatrix         from '@/components/CorrelationMatrix';
 import ComparisonTool            from '@/components/ComparisonTool';
 import SectorAnalysis            from '@/components/SectorAnalysis';
 import AiChatPanel               from '@/components/AiChatPanel';
+import InsiderTracker            from '@/components/InsiderTracker';
 
-type ActiveTab = 'watchlist' | 'history' | 'heatmap' | 'screener' | 'alerts' | 'multicharts' | 'patterns' | 'mtf' | 'correlation' | 'compare' | 'sector' | 'aichat';
+type ActiveTab = 'watchlist' | 'history' | 'heatmap' | 'screener' | 'alerts' | 'multicharts' | 'patterns' | 'mtf' | 'correlation' | 'compare' | 'sector' | 'aichat' | 'insider';
 
 export default function Home() {
   const wl = useWatchlists();
@@ -256,6 +257,14 @@ export default function Home() {
           <AiChatPanel
             watchlistTickers={wl.activeWatchlist?.tickers ?? []}
             activeTicker={expandedTicker ?? undefined}
+          />
+        )}
+
+        {/* Insider Trading Tracker */}
+        {activeTab === 'insider' && (
+          <InsiderTracker
+            watchlistTickers={wl.activeWatchlist?.tickers ?? []}
+            onTickerClick={t => { setActiveTab('watchlist'); handleSignalTickerClick(t); }}
           />
         )}
 

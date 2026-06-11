@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from 'react';
-import { TrendingUp, TrendingDown, Trash2, ChevronDown, ChevronUp, BarChart2, Clock, Target, Award, AlertTriangle } from 'lucide-react';
+import { TrendingUp, TrendingDown, Trash2, ChevronDown, ChevronUp, BarChart2, Clock, Target, Award, AlertTriangle, Search, X } from 'lucide-react';
 import { SignalLog, BacktestStats, computeStats, clearSignalHistory } from '@/lib/signalHistory';
 
 interface Props {
@@ -10,7 +10,7 @@ interface Props {
 }
 
 type DirectionFilter = 'ALL' | 'BUY' | 'SELL';
-type SortKey = 'date' | 'ticker' | 'return7d' | 'conviction';
+type SortKey = 'date' | 'ticker' | 'return7d' | 'return14d' | 'conviction' | 'best' | 'worst';
 
 function ReturnBadge({ value, direction }: { value: number | null; direction: 'BUY' | 'SELL' }) {
   if (value === null) return <span className="text-slate-600 text-xs">—</span>;
@@ -53,22 +53,56 @@ export default function SignalHistoryPanel({ logs, onClear }: Props) {
   const [sortAsc, setSortAsc] = useState(false);
   const [showConfirmClear, setShowConfirmClear] = useState(false);
   const [page, setPage] = useState(0);
+  const [tickerSearch, setTickerSearch] = useState('');
   const PAGE_SIZE = 20;
 
   const stats: BacktestStats = useMemo(() => computeStats(logs, dirFilter), [logs, dirFilter]);
 
+  // Best return across all available periods for a log
+  const bestReturn = (l: SignalLog) => {
+    const vals = [l.return3d, l.return7d, l.return14d].filter((v): v is number => v != null);
+    if (!vals.length) return null;
+    return l.direction === 'BUY' ? Math.max(...vals) : Math.min(...vals);
+  };
+  const hasData = (l: SignalLog) => l.return3d != null || l.return7d != null || l.return14d != null;
+
   const filtered = useMemo(() => {
     let list = dirFilter === 'ALL' ? logs : logs.filter(l => l.direction === dirFilter);
+    // Ticker search filter
+    if (tickerSearch.trim()) {
+      const q = tickerSearch.trim().toUpperCase();
+      list = list.filter(l => l.ticker.toUpperCase().includes(q));
+    }
     list = [...list].sort((a, b) => {
+      // Special sorts
+      if (sortKey === 'best') {
+        // Has data first, then sort by best return desc
+        const aHas = hasData(a), bHas = hasData(b);
+        if (aHas !== bHas) return aHas ? -1 : 1;
+        const aR = bestReturn(a) ?? -999, bR = bestReturn(b) ?? -999;
+        return bR - aR;
+      }
+      if (sortKey === 'worst') {
+        const aHas = hasData(a), bHas = hasData(b);
+        if (aHas !== bHas) return aHas ? -1 : 1;
+        const aR = bestReturn(a) ?? 999, bR = bestReturn(b) ?? 999;
+        return aR - bR;
+      }
+      // Has data float to top by default (date sort)
+      if (sortKey === 'date') {
+        const aHas = hasData(a), bHas = hasData(b);
+        if (aHas !== bHas) return sortAsc ? (aHas ? 1 : -1) : (aHas ? -1 : 1);
+      }
       let cmp = 0;
-      if (sortKey === 'date') cmp = a.date.localeCompare(b.date);
-      else if (sortKey === 'ticker') cmp = a.ticker.localeCompare(b.ticker);
-      else if (sortKey === 'return7d') cmp = (a.return7d ?? -999) - (b.return7d ?? -999);
+      if (sortKey === 'date')       cmp = a.date.localeCompare(b.date);
+      else if (sortKey === 'ticker')     cmp = a.ticker.localeCompare(b.ticker);
+      else if (sortKey === 'return7d')   cmp = (a.return7d ?? -999) - (b.return7d ?? -999);
+      else if (sortKey === 'return14d')  cmp = (a.return14d ?? -999) - (b.return14d ?? -999);
       else if (sortKey === 'conviction') cmp = a.convictionScore - b.convictionScore;
       return sortAsc ? cmp : -cmp;
     });
     return list;
-  }, [logs, dirFilter, sortKey, sortAsc]);
+  }, [logs, dirFilter, sortKey, sortAsc, tickerSearch]);
 
   const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
@@ -207,6 +241,45 @@ export default function SignalHistoryPanel({ logs, onClear }: Props) {
               </button>
             )}
           </div>
+        </div>
+
+        {/* Filter + quick sort bar */}
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-700/60 bg-slate-900/20 flex-wrap">
+          {/* Ticker search */}
+          <div className="relative">
+            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+            <input
+              value={tickerSearch}
+              onChange={e => { setTickerSearch(e.target.value.toUpperCase()); setPage(0); }}
+              placeholder="Tìm mã..."
+              className="pl-7 pr-6 py-1.5 bg-slate-800 border border-slate-600 rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 w-28"
+            />
+            {tickerSearch && (
+              <button onClick={() => { setTickerSearch(''); setPage(0); }}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                <X size={11} />
+              </button>
+            )}
+          </div>
+          {/* Quick sort buttons */}
+          <div className="flex rounded-lg overflow-hidden border border-slate-700 text-xs">
+            <button onClick={() => { setSortKey('date'); setSortAsc(false); setPage(0); }}
+              className={`px-2.5 py-1.5 transition-colors flex items-center gap-1 ${sortKey === 'date' ? 'bg-slate-600 text-slate-200' : 'text-slate-500 hover:bg-slate-700'}`}>
+              Mới nhất & có data
+            </button>
+            <button onClick={() => { setSortKey('best'); setPage(0); }}
+              className={`px-2.5 py-1.5 transition-colors flex items-center gap-1 ${sortKey === 'best' ? 'bg-emerald-500/20 text-emerald-300' : 'text-slate-500 hover:bg-slate-700'}`}>
+              <TrendingUp size={11}/> Lãi nhất
+            </button>
+            <button onClick={() => { setSortKey('worst'); setPage(0); }}
+              className={`px-2.5 py-1.5 transition-colors flex items-center gap-1 ${sortKey === 'worst' ? 'bg-rose-500/20 text-rose-300' : 'text-slate-500 hover:bg-slate-700'}`}>
+              <TrendingDown size={11}/> Lỗ nhất
+            </button>
+          </div>
+          {/* Has-data indicator */}
+          <span className="text-[10px] text-slate-600 ml-auto">
+            {filtered.filter(l => l.return3d != null || l.return7d != null || l.return14d != null).length} / {filtered.length} có kết quả
+          </span>
         </div>
 
         <div className="overflow-x-auto">

@@ -7,7 +7,7 @@ import {
   Activity, TrendingUp, TrendingDown, Filter, AlertCircle, RefreshCw,
   BarChart2, X, Plus, Trash2, Brain, GripVertical, Settings2, EyeOff,
   History, Map as MapIcon, SlidersHorizontal, HelpCircle, MoreVertical,
-  RefreshCcw, Bell, LayoutGrid, Layers, GitFork, Columns2, PieChart, MessageSquare, UserSearch, ChevronDown,
+  RefreshCcw, Bell, LayoutGrid, Layers, GitFork, Columns2, PieChart, MessageSquare, UserSearch, ChevronDown, Waves,
 } from 'lucide-react';
 
 import { type RsiFilter, type MacdFilter, type StochFilter, MASTER_ID } from '@/types';
@@ -37,8 +37,9 @@ import ComparisonTool            from '@/components/ComparisonTool';
 import SectorAnalysis            from '@/components/SectorAnalysis';
 import AiChatPanel               from '@/components/AiChatPanel';
 import InsiderTracker            from '@/components/InsiderTracker';
+import SmartMoneyFlow           from '@/components/SmartMoneyFlow';
 
-type ActiveTab = 'watchlist' | 'history' | 'heatmap' | 'screener' | 'alerts' | 'multicharts' | 'patterns' | 'mtf' | 'correlation' | 'compare' | 'sector' | 'aichat' | 'insider';
+type ActiveTab = 'watchlist' | 'history' | 'heatmap' | 'screener' | 'alerts' | 'multicharts' | 'patterns' | 'mtf' | 'correlation' | 'compare' | 'sector' | 'aichat' | 'insider' | 'smartmoney';
 
 export default function Home() {
   const wl = useWatchlists();
@@ -170,6 +171,7 @@ export default function Home() {
           {/* ── More dropdown ── */}
           {(() => {
             const moreTabs = [
+              { id: 'smartmoney'  as ActiveTab, label: 'Smart Money', icon: <Waves size={13}/>,            cls: 'cyan'    },
               { id: 'mtf'         as ActiveTab, label: 'MTF',          icon: <Layers size={13}/>,            cls: 'indigo'  },
               { id: 'correlation' as ActiveTab, label: 'Correlation',  icon: <GitFork size={13}/>,           cls: 'teal'    },
               { id: 'multicharts' as ActiveTab, label: 'Multi Chart',  icon: <LayoutGrid size={13}/>,        cls: 'cyan'    },
@@ -263,6 +265,14 @@ export default function Home() {
         {/* Insider Trading Tracker */}
         {activeTab === 'insider' && (
           <InsiderTracker
+            watchlistTickers={wl.activeWatchlist?.tickers ?? []}
+            onTickerClick={t => { setActiveTab('watchlist'); handleSignalTickerClick(t); }}
+          />
+        )}
+
+        {/* Smart Money Flow */}
+        {activeTab === 'smartmoney' && (
+          <SmartMoneyFlow
             watchlistTickers={wl.activeWatchlist?.tickers ?? []}
             onTickerClick={t => { setActiveTab('watchlist'); handleSignalTickerClick(t); }}
           />

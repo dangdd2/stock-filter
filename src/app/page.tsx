@@ -38,8 +38,9 @@ import SectorAnalysis            from '@/components/SectorAnalysis';
 import AiChatPanel               from '@/components/AiChatPanel';
 import InsiderTracker            from '@/components/InsiderTracker';
 import SmartMoneyFlow           from '@/components/SmartMoneyFlow';
+import EarningsCalendar         from '@/components/EarningsCalendar';
 
-type ActiveTab = 'watchlist' | 'history' | 'heatmap' | 'screener' | 'alerts' | 'multicharts' | 'patterns' | 'mtf' | 'correlation' | 'compare' | 'sector' | 'aichat' | 'insider' | 'smartmoney';
+type ActiveTab = 'watchlist' | 'history' | 'heatmap' | 'screener' | 'alerts' | 'multicharts' | 'patterns' | 'mtf' | 'correlation' | 'compare' | 'sector' | 'aichat' | 'insider' | 'smartmoney' | 'earnings';
 
 export default function Home() {
   const wl = useWatchlists();
@@ -152,6 +153,7 @@ export default function Home() {
             { id: 'aichat'      as ActiveTab, label: 'AI Chat',    icon: <MessageSquare size={13}/>,  cls: 'emerald' },
             { id: 'sector'      as ActiveTab, label: 'Ngành',      icon: <PieChart size={13}/>,       cls: 'orange'  },
             { id: 'insider'     as ActiveTab, label: 'Insider',    icon: <UserSearch size={13}/>,     cls: 'rose'    },
+            { id: 'earnings'    as ActiveTab, label: 'Earnings',   icon: <BarChart2 size={13}/>,      cls: 'teal'    },
             { id: 'compare'     as ActiveTab, label: 'So sánh',    icon: <Columns2 size={13}/>,       cls: 'sky'     },
             { id: 'screener'    as ActiveTab, label: 'Screener',   icon: <SlidersHorizontal size={13}/>, cls: 'amber' },
             { id: 'heatmap'     as ActiveTab, label: 'Heatmap',    icon: <MapIcon size={13}/>,        cls: 'emerald' },
@@ -265,6 +267,14 @@ export default function Home() {
         {/* Insider Trading Tracker */}
         {activeTab === 'insider' && (
           <InsiderTracker
+            watchlistTickers={wl.activeWatchlist?.tickers ?? []}
+            onTickerClick={t => { setActiveTab('watchlist'); handleSignalTickerClick(t); }}
+          />
+        )}
+
+        {/* Earnings Calendar */}
+        {activeTab === 'earnings' && (
+          <EarningsCalendar
             watchlistTickers={wl.activeWatchlist?.tickers ?? []}
             onTickerClick={t => { setActiveTab('watchlist'); handleSignalTickerClick(t); }}
           />

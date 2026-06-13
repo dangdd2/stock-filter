@@ -187,16 +187,34 @@ export default function ChartView({ ticker }: { ticker: string }) {
               tickFormatter={v => v.toLocaleString()}
             />
             <Tooltip
-              {...tooltipStyle}
-              formatter={(value, name, props: { payload?: ChartDataPoint }) => {
-                if (name === 'OHLC' && props.payload) {
-                  const { open, high, low, close } = props.payload;
-                  return [
-                    `O:${open.toLocaleString()} H:${high.toLocaleString()} L:${low.toLocaleString()} C:${close.toLocaleString()}`,
-                    'Price',
-                  ];
-                }
-                return [value as string, String(name)];
+              content={({ active, label, payload }) => {
+                if (!active || !payload?.length) return null;
+                const d = payload[0]?.payload as ChartDataPoint | undefined;
+                if (!d) return null;
+                const rows: { label: string; value: string; color: string }[] = [];
+                rows.push({ label: 'O', value: d.open.toLocaleString(),  color: '#94a3b8' });
+                rows.push({ label: 'H', value: d.high.toLocaleString(),  color: '#10b981' });
+                rows.push({ label: 'L', value: d.low.toLocaleString(),   color: '#f43f5e' });
+                rows.push({ label: 'C', value: d.close.toLocaleString(), color: d.close >= d.open ? '#10b981' : '#f43f5e' });
+                if (d.volume != null)      rows.push({ label: 'Vol',    value: fmtVol(d.volume),                        color: '#64748b' });
+                if (d.ma20 != null)        rows.push({ label: 'MA20',   value: d.ma20.toLocaleString(),                 color: '#60a5fa' });
+                if (d.ma50 != null)        rows.push({ label: 'MA50',   value: d.ma50.toLocaleString(),                 color: '#f59e0b' });
+                if (d.rsi != null)         rows.push({ label: 'RSI',    value: d.rsi.toFixed(1),                        color: '#a78bfa' });
+                if (d.macd != null)        rows.push({ label: 'MACD',   value: d.macd.toFixed(2),                       color: '#3b82f6' });
+                if (d.macdSignal != null)  rows.push({ label: 'Signal', value: d.macdSignal.toFixed(2),                 color: '#f59e0b' });
+                if (d.stochK != null)      rows.push({ label: '%K',     value: d.stochK.toFixed(1),                     color: '#3b82f6' });
+                if (d.stochD != null)      rows.push({ label: '%D',     value: d.stochD.toFixed(1),                     color: '#f59e0b' });
+                return (
+                  <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '8px 12px', fontSize: 12, minWidth: 160 }}>
+                    <div style={{ color: '#94a3b8', fontWeight: 600, marginBottom: 6 }}>{label}</div>
+                    {rows.map(r => (
+                      <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, color: r.color, lineHeight: 1.7 }}>
+                        <span style={{ color: '#64748b' }}>{r.label}</span>
+                        <span style={{ fontFamily: 'monospace' }}>{r.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
               }}
             />
 
@@ -304,13 +322,7 @@ export default function ChartView({ ticker }: { ticker: string }) {
               tickFormatter={fmtVol}
               domain={[0, maxVolume * 1.2]}
             />
-            <Tooltip
-              {...tooltipStyle}
-              formatter={(value, name) => {
-                if (name === 'Volume') return [fmtVol(Number(value)), 'Volume'];
-                return [value as string, String(name)];
-              }}
-            />
+            <Tooltip content={() => null} />
 
             {/* Volume bars coloured by candle direction */}
             <Bar dataKey="volume" name="Volume" isAnimationActive={false} maxBarSize={10}>
@@ -355,7 +367,7 @@ export default function ChartView({ ticker }: { ticker: string }) {
                 width={70}
                 orientation="right"
               />
-              <Tooltip {...tooltipStyle} />
+              <Tooltip content={() => null} />
               {refs.map(r => (
                 <ReferenceLine key={r.y} y={r.y} stroke={r.s} strokeDasharray="5 5" />
               ))}

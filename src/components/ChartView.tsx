@@ -81,14 +81,30 @@ export default function ChartView({ ticker }: { ticker: string }) {
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
 
-  // Toggles — persisted in localStorage
+  // Overlay toggles (on candlestick panel) — persisted in localStorage
   const [showMA20, setShowMA20] = useState(() => readToggle('chart_showMA20', true));
   const [showMA50, setShowMA50] = useState(() => readToggle('chart_showMA50', false));
   const [showBB,   setShowBB]   = useState(() => readToggle('chart_showBB',   true));
 
+  // Sub-panel toggles (Volume / RSI / MACD / Stoch) — persisted in localStorage
+  const [showVolPanel,   setShowVolPanel]   = useState(() => readToggle('chart_showVolPanel',   true));
+  const [showRsiPanel,   setShowRsiPanel]   = useState(() => readToggle('chart_showRsiPanel',   true));
+  const [showMacdPanel,  setShowMacdPanel]  = useState(() => readToggle('chart_showMacdPanel',  true));
+  const [showStochPanel, setShowStochPanel] = useState(() => readToggle('chart_showStochPanel', false));
+
+  // Overlay-on-candlestick toggles (compact RSI/MACD line drawn inside the price panel)
+  const [showRsiOverlay,  setShowRsiOverlay]  = useState(() => readToggle('chart_showRsiOverlay',  false));
+  const [showMacdOverlay, setShowMacdOverlay] = useState(() => readToggle('chart_showMacdOverlay', false));
+
   useEffect(() => { localStorage.setItem('chart_showMA20', String(showMA20)); }, [showMA20]);
   useEffect(() => { localStorage.setItem('chart_showMA50', String(showMA50)); }, [showMA50]);
   useEffect(() => { localStorage.setItem('chart_showBB',   String(showBB));   }, [showBB]);
+  useEffect(() => { localStorage.setItem('chart_showVolPanel',   String(showVolPanel));   }, [showVolPanel]);
+  useEffect(() => { localStorage.setItem('chart_showRsiPanel',   String(showRsiPanel));   }, [showRsiPanel]);
+  useEffect(() => { localStorage.setItem('chart_showMacdPanel',  String(showMacdPanel));  }, [showMacdPanel]);
+  useEffect(() => { localStorage.setItem('chart_showStochPanel', String(showStochPanel)); }, [showStochPanel]);
+  useEffect(() => { localStorage.setItem('chart_showRsiOverlay',  String(showRsiOverlay));  }, [showRsiOverlay]);
+  useEffect(() => { localStorage.setItem('chart_showMacdOverlay', String(showMacdOverlay)); }, [showMacdOverlay]);
 
   // ─── Fetch — now uses /api/chart/[ticker] (correct route, not news) ───────
   useEffect(() => {
@@ -133,11 +149,25 @@ export default function ChartView({ ticker }: { ticker: string }) {
   const maxPrice  = Math.max(...chartData.map(d => d.high));
   const maxVolume = Math.max(...chartData.map(d => d.volume ?? 0));
 
-  // Toggles config
+  // Overlay toggles config (on candlestick)
   const toggles = [
     { label: 'MA20', color: '#60a5fa', active: showMA20, set: setShowMA20 },
     { label: 'MA50', color: '#f59e0b', active: showMA50, set: setShowMA50 },
     { label: 'BB',   color: '#a78bfa', active: showBB,   set: setShowBB   },
+  ] as const;
+
+  // Sub-panel toggles config (Vol / RSI / MACD / Stoch)
+  const panelToggles = [
+    { label: 'Vol',   color: '#64748b', active: showVolPanel,   set: setShowVolPanel   },
+    { label: 'RSI',   color: '#a78bfa', active: showRsiPanel,   set: setShowRsiPanel   },
+    { label: 'MACD',  color: '#3b82f6', active: showMacdPanel,  set: setShowMacdPanel  },
+    { label: 'Stoch', color: '#f59e0b', active: showStochPanel, set: setShowStochPanel },
+  ] as const;
+
+  // Overlay-on-candle toggles config (RSI/MACD mini-line drawn inside price panel)
+  const overlayOscToggles = [
+    { label: 'RSI on chart',  color: '#a78bfa', active: showRsiOverlay,  set: setShowRsiOverlay  },
+    { label: 'MACD on chart', color: '#3b82f6', active: showMacdOverlay, set: setShowMacdOverlay },
   ] as const;
 
   // Shared tooltip style
@@ -150,7 +180,7 @@ export default function ChartView({ ticker }: { ticker: string }) {
   return (
     <div className="p-6 bg-slate-900 border-t border-slate-700">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
         <h3 className="text-lg font-bold flex items-center gap-2">
           <BarChart2 className="text-blue-400" /> {ticker} — 6 Months
         </h3>
@@ -171,6 +201,42 @@ export default function ChartView({ ticker }: { ticker: string }) {
         </div>
       </div>
 
+      {/* Sub-panel visibility row */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <span className="text-[11px] text-slate-500 mr-1">Panels:</span>
+        {panelToggles.map(({ label, color, active, set }) => (
+          <button
+            key={label}
+            onClick={() => set(v => !v)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
+              active ? 'border-transparent' : 'border-slate-600 opacity-40'
+            }`}
+            style={active ? { backgroundColor: color + '22', color, borderColor: color + '55' } : {}}
+          >
+            <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: active ? color : '#475569' }} />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Overlay-on-candle oscillator row */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <span className="text-[11px] text-slate-500 mr-1">Overlay trên chart:</span>
+        {overlayOscToggles.map(({ label, color, active, set }) => (
+          <button
+            key={label}
+            onClick={() => set(v => !v)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
+              active ? 'border-transparent' : 'border-slate-600 opacity-40'
+            }`}
+            style={active ? { backgroundColor: color + '22', color, borderColor: color + '55' } : {}}
+          >
+            <span className="inline-block w-3 h-0.5 rounded" style={{ backgroundColor: active ? color : '#475569', borderTop: active ? `1px dashed ${color}` : 'none' }} />
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* ── Panel 1: Price (70%) ─────────────────────────────────────────────── */}
       <div className="w-full" style={{ height: 300 }}>
         <ResponsiveContainer width="100%" height="100%">
@@ -186,6 +252,13 @@ export default function ChartView({ ticker }: { ticker: string }) {
               fontSize={11}
               tickFormatter={v => v.toLocaleString()}
             />
+            {/* Hidden secondary scales so RSI/MACD can be drawn as compact overlay lines on the price panel */}
+            {showRsiOverlay && (
+              <YAxis yAxisId="rsiOverlay" domain={[0, 100]} hide />
+            )}
+            {showMacdOverlay && (
+              <YAxis yAxisId="macdOverlay" domain={['auto', 'auto']} hide />
+            )}
             <Tooltip
               content={({ active, label, payload }) => {
                 if (!active || !payload?.length) return null;
@@ -298,11 +371,55 @@ export default function ChartView({ ticker }: { ticker: string }) {
                 connectNulls
               />
             )}
+
+            {/* RSI overlay — compact line drawn on price panel using hidden 0–100 scale */}
+            {showRsiOverlay && (
+              <Line
+                yAxisId="rsiOverlay"
+                type="monotone"
+                dataKey="rsi"
+                stroke="#a78bfa"
+                strokeWidth={1.5}
+                strokeDasharray="3 2"
+                dot={false}
+                name="RSI"
+                connectNulls
+              />
+            )}
+
+            {/* MACD overlay — compact line(s) drawn on price panel using hidden auto-scale */}
+            {showMacdOverlay && (
+              <>
+                <Line
+                  yAxisId="macdOverlay"
+                  type="monotone"
+                  dataKey="macd"
+                  stroke="#3b82f6"
+                  strokeWidth={1.5}
+                  strokeDasharray="3 2"
+                  dot={false}
+                  name="MACD"
+                  connectNulls
+                />
+                <Line
+                  yAxisId="macdOverlay"
+                  type="monotone"
+                  dataKey="macdSignal"
+                  stroke="#f59e0b"
+                  strokeWidth={1.5}
+                  strokeDasharray="3 2"
+                  dot={false}
+                  name="Signal"
+                  connectNulls
+                />
+              </>
+            )}
           </ComposedChart>
         </ResponsiveContainer>
       </div>
 
       {/* ── Panel 2: Volume (30%) — separate chart, synced via syncId ──────── */}
+      {showVolPanel && (
       <div className="w-full mt-1" style={{ height: 110 }}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={chartData} syncId="chart" margin={{ top: 0, right: 60, left: 0, bottom: 0 }}>
@@ -344,15 +461,29 @@ export default function ChartView({ ticker }: { ticker: string }) {
           </ComposedChart>
         </ResponsiveContainer>
       </div>
+      )}
+
+      {/* X-axis fallback when volume panel hidden — keep date labels visible */}
+      {!showVolPanel && (
+        <div className="w-full mt-1" style={{ height: 28 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={chartData} syncId="chart" margin={{ top: 0, right: 60, left: 0, bottom: 0 }}>
+              <XAxis dataKey="dateStr" stroke="#94a3b8" fontSize={11} tickMargin={6} minTickGap={40} />
+              <YAxis orientation="right" width={70} hide />
+              <Tooltip content={() => null} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       {/* ── Oscillator panels ─────────────────────────────────────────────────── */}
       {(
         [
-          { title: 'RSI (14)',       key: 'rsi',    ticks: [30, 70] as number[], refs: [{ y: 70, s: '#f43f5e' }, { y: 30, s: '#10b981' }], domain: [0, 100] as [number, number] },
-          { title: 'MACD (12,26,9)', key: 'macd',   ticks: undefined,            refs: [],                                                   domain: undefined },
-          { title: 'Stochastic RSI', key: 'stochK', ticks: [20, 80] as number[], refs: [{ y: 80, s: '#f43f5e' }, { y: 20, s: '#10b981' }], domain: [0, 100] as [number, number] },
+          { title: 'RSI (14)',       key: 'rsi',    visible: showRsiPanel,   ticks: [30, 70] as number[], refs: [{ y: 70, s: '#f43f5e' }, { y: 30, s: '#10b981' }], domain: [0, 100] as [number, number] },
+          { title: 'MACD (12,26,9)', key: 'macd',   visible: showMacdPanel,  ticks: undefined,            refs: [],                                                   domain: undefined },
+          { title: 'Stochastic RSI', key: 'stochK', visible: showStochPanel, ticks: [20, 80] as number[], refs: [{ y: 80, s: '#f43f5e' }, { y: 20, s: '#10b981' }], domain: [0, 100] as [number, number] },
         ] as const
-      ).map(({ title, key, ticks, refs, domain }) => (
+      ).filter(p => p.visible).map(({ title, key, ticks, refs, domain }) => (
         <div key={key} className="w-full mt-4" style={{ height: 120 }}>
           <h4 className="text-sm font-semibold mb-1 text-slate-400">{title}</h4>
           <ResponsiveContainer width="100%" height="100%">

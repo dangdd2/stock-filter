@@ -39,8 +39,9 @@ import AiChatPanel               from '@/components/AiChatPanel';
 import InsiderTracker            from '@/components/InsiderTracker';
 import SmartMoneyFlow           from '@/components/SmartMoneyFlow';
 import EarningsCalendar         from '@/components/EarningsCalendar';
+import MarketOverview           from '@/components/MarketOverview';
 
-type ActiveTab = 'watchlist' | 'history' | 'heatmap' | 'screener' | 'alerts' | 'multicharts' | 'patterns' | 'mtf' | 'correlation' | 'compare' | 'sector' | 'aichat' | 'insider' | 'smartmoney' | 'earnings';
+type ActiveTab = 'watchlist' | 'history' | 'heatmap' | 'screener' | 'alerts' | 'multicharts' | 'patterns' | 'mtf' | 'correlation' | 'compare' | 'sector' | 'aichat' | 'insider' | 'smartmoney' | 'earnings' | 'overview';
 
 export default function Home() {
   const wl = useWatchlists();
@@ -149,6 +150,7 @@ export default function Home() {
         <div className="flex items-center gap-1 flex-wrap">
           {/* ── Primary tabs ── */}
           {([
+            { id: 'overview'    as ActiveTab, label: 'Thị trường', icon: <Activity size={13}/>,       cls: 'blue'    },
             { id: 'watchlist'   as ActiveTab, label: 'Watchlist',  icon: <BarChart2 size={13}/>,      cls: 'blue'    },
             { id: 'aichat'      as ActiveTab, label: 'AI Chat',    icon: <MessageSquare size={13}/>,  cls: 'emerald' },
             { id: 'sector'      as ActiveTab, label: 'Ngành',      icon: <PieChart size={13}/>,       cls: 'orange'  },
@@ -216,6 +218,13 @@ export default function Home() {
 
       <main className="w-full px-4 py-4 space-y-3">
         <MarketStatusBar loading={sd.loading} lastUpdated={sd.lastUpdated} onRefresh={sd.fetchData}/>
+
+        {/* Market Overview */}
+        {activeTab === 'overview' && (
+          <MarketOverview
+            onTickerClick={t => { setActiveTab('watchlist'); handleSignalTickerClick(t); }}
+          />
+        )}
 
         {/* Patterns */}
         {activeTab === 'patterns' && (

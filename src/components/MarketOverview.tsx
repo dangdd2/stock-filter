@@ -2,12 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  RefreshCw, TrendingUp, TrendingDown, Minus,
-  Activity, BarChart2, Zap,
+  RefreshCw, TrendingUp, TrendingDown,
+  Activity, BarChart2, Zap, AlertCircle,
 } from 'lucide-react';
 import {
-  ResponsiveContainer, AreaChart, Area,
-  XAxis, YAxis, Tooltip as ReTooltip,
+  ResponsiveContainer, AreaChart, Area, XAxis, YAxis,
 } from 'recharts';
 import type { MarketOverviewResult, IndexData, MoverStock, BreadthData } from '@/app/api/market-overview/route';
 
@@ -34,7 +33,7 @@ const pctBg = (v: number | null) =>
   : v > 0   ? 'bg-emerald-500/15 border-emerald-500/30'
   :           'bg-rose-500/15    border-rose-500/30';
 
-// ─── Mini sparkline for index ──────────────────────────────────────────────────
+// ─── Mini sparkline ────────────────────────────────────────────────────────────
 function IndexSparkline({ closes, positive }: { closes: number[]; positive: boolean }) {
   if (closes.length < 2) return null;
   const min = Math.min(...closes);
@@ -46,7 +45,7 @@ function IndexSparkline({ closes, positive }: { closes: number[]; positive: bool
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 2, right: 0, left: 0, bottom: 2 }}>
           <defs>
-            <linearGradient id={`sg-${positive}`} x1="0" y1="0" x2="0" y2="1">
+            <linearGradient id={`sg-${positive ? 'pos' : 'neg'}`} x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%"  stopColor={color} stopOpacity={0.3} />
               <stop offset="95%" stopColor={color} stopOpacity={0}   />
             </linearGradient>
@@ -54,14 +53,14 @@ function IndexSparkline({ closes, positive }: { closes: number[]; positive: bool
           <YAxis domain={[min * 0.998, max * 1.002]} hide />
           <XAxis dataKey="i" hide />
           <Area type="monotone" dataKey="v" stroke={color} strokeWidth={1.5}
-            fill={`url(#sg-${positive})`} dot={false} isAnimationActive={false} />
+            fill={`url(#sg-${positive ? 'pos' : 'neg'})`} dot={false} isAnimationActive={false} />
         </AreaChart>
       </ResponsiveContainer>
     </div>
   );
 }
 
-// ─── Index card ────────────────────────────────────────────────────────────────
+// ─── Index card — only rendered when hasData ───────────────────────────────────
 function IndexCard({ idx }: { idx: IndexData }) {
   const pos = (idx.changePct ?? 0) >= 0;
   const Icon = pos ? TrendingUp : TrendingDown;
@@ -73,7 +72,7 @@ function IndexCard({ idx }: { idx: IndexData }) {
           <Icon size={13} className={iconColor} />
           <span className="text-xs font-semibold text-slate-300">{idx.name}</span>
         </div>
-        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${pctBg(idx.changePct)} ${pctColor(idx.changePct)}`}>
+        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${pctBg(idx.ytdPct)} ${pctColor(idx.ytdPct)}`}>
           YTD {fmtPct(idx.ytdPct)}
         </span>
       </div>
@@ -92,8 +91,8 @@ function IndexCard({ idx }: { idx: IndexData }) {
 
       <div className="grid grid-cols-3 gap-1 pt-1 border-t border-slate-700/50">
         {[
-          { label: 'Mở', value: fmtPrice(idx.open)  },
-          { label: 'Cao', value: fmtPrice(idx.high)  },
+          { label: 'Mở',   value: fmtPrice(idx.open) },
+          { label: 'Cao',  value: fmtPrice(idx.high) },
           { label: 'Thấp', value: fmtPrice(idx.low)  },
         ].map(({ label, value }) => (
           <div key={label} className="text-center">
@@ -114,8 +113,8 @@ function MoverRow({
   onTickerClick?: (t: string) => void;
 }) {
   const isGain = type === 'gain';
-  const color  = isGain ? 'text-emerald-400' : 'text-rose-400';
-  const bg     = isGain ? 'bg-emerald-500/10' : 'bg-rose-500/10';
+  const color    = isGain ? 'text-emerald-400' : 'text-rose-400';
+  const bg       = isGain ? 'bg-emerald-500/10' : 'bg-rose-500/10';
   const barColor = isGain ? 'bg-emerald-500/60' : 'bg-rose-500/60';
   const barWidth = Math.min(Math.abs(stock.changePct) * 12, 100);
 
@@ -172,7 +171,6 @@ function BreadthBar({ breadth }: { breadth: BreadthData }) {
         <span className={`text-xs ${labelColor}`}>{label}</span>
       </div>
 
-      {/* Stacked bar */}
       <div className="flex h-3 rounded-full overflow-hidden gap-px mb-3">
         <div className="bg-emerald-500/70 transition-all" style={{ width: `${adv}%` }} />
         <div className="bg-slate-600/60 transition-all"   style={{ width: `${unc}%` }} />
@@ -181,9 +179,9 @@ function BreadthBar({ breadth }: { breadth: BreadthData }) {
 
       <div className="grid grid-cols-3 gap-1">
         {[
-          { label: 'Tăng',    value: breadth.advance,   color: 'text-emerald-400', dot: 'bg-emerald-500' },
-          { label: 'Không đổi', value: breadth.unchanged, color: 'text-slate-400', dot: 'bg-slate-600'  },
-          { label: 'Giảm',   value: breadth.decline,   color: 'text-rose-400',    dot: 'bg-rose-500'    },
+          { label: 'Tăng',      value: breadth.advance,   color: 'text-emerald-400', dot: 'bg-emerald-500' },
+          { label: 'Không đổi', value: breadth.unchanged, color: 'text-slate-400',   dot: 'bg-slate-600'   },
+          { label: 'Giảm',      value: breadth.decline,   color: 'text-rose-400',    dot: 'bg-rose-500'    },
         ].map(({ label, value, color, dot }) => (
           <div key={label} className="flex flex-col items-center gap-0.5">
             <div className="flex items-center gap-1">
@@ -198,7 +196,7 @@ function BreadthBar({ breadth }: { breadth: BreadthData }) {
   );
 }
 
-// ─── Main component ────────────────────────────────────────────────────────────
+// ─── Main ──────────────────────────────────────────────────────────────────────
 interface Props {
   onTickerClick?: (ticker: string) => void;
 }
@@ -227,6 +225,11 @@ export default function MarketOverview({ onTickerClick }: Props) {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // Separate indices with and without data
+  const validIndices  = data?.indices.filter(i => i.hasData) ?? [];
+  const hasAnyIndex   = validIndices.length > 0;
+  const hasMovers     = (data?.topGainers.length ?? 0) > 0 || (data?.topLosers.length ?? 0) > 0;
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -252,7 +255,8 @@ export default function MarketOverview({ onTickerClick }: Props) {
 
       {/* Error */}
       {error && (
-        <div className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
+        <div className="flex items-center gap-2 text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
+          <AlertCircle size={12} />
           Lỗi: {error}
         </div>
       )}
@@ -268,66 +272,83 @@ export default function MarketOverview({ onTickerClick }: Props) {
 
       {data && (
         <>
-          {/* Index cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {data.indices.map(idx => <IndexCard key={idx.symbol} idx={idx} />)}
-          </div>
+          {/* Index cards — chỉ hiện nếu có data */}
+          {hasAnyIndex ? (
+            <div className={`grid gap-3 ${validIndices.length === 1 ? 'grid-cols-1 max-w-sm' : validIndices.length === 2 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-3'}`}>
+              {validIndices.map(idx => <IndexCard key={idx.symbol} idx={idx} />)}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-800/40 border border-slate-700/40 rounded-xl px-4 py-3">
+              <AlertCircle size={12} />
+              Không lấy được dữ liệu chỉ số (VN-Index, HNX, UPCOM) từ Yahoo Finance lúc này.
+            </div>
+          )}
 
           {/* Movers + Breadth */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-            {/* Top Gainers */}
-            <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3">
-              <div className="flex items-center gap-1.5 mb-2 px-1">
-                <TrendingUp size={13} className="text-emerald-400" />
-                <span className="text-xs font-semibold text-slate-300">Top tăng</span>
-                <span className="ml-auto text-[10px] text-slate-500">Giá / Vol</span>
-              </div>
-              {data.topGainers.length === 0 ? (
-                <div className="text-xs text-slate-500 px-3 py-4 text-center">Không có dữ liệu</div>
-              ) : (
-                data.topGainers.map((s, i) => (
+          {hasMovers && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+              {/* Top Gainers */}
+              <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3">
+                <div className="flex items-center gap-1.5 mb-2 px-1">
+                  <TrendingUp size={13} className="text-emerald-400" />
+                  <span className="text-xs font-semibold text-slate-300">Top tăng</span>
+                  <span className="ml-auto text-[10px] text-slate-500">Giá / Vol</span>
+                </div>
+                {data.topGainers.map((s, i) => (
                   <MoverRow key={s.ticker} stock={s} rank={i + 1} type="gain" onTickerClick={onTickerClick} />
-                ))
-              )}
-            </div>
-
-            {/* Top Losers */}
-            <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3">
-              <div className="flex items-center gap-1.5 mb-2 px-1">
-                <TrendingDown size={13} className="text-rose-400" />
-                <span className="text-xs font-semibold text-slate-300">Top giảm</span>
-                <span className="ml-auto text-[10px] text-slate-500">Giá / Vol</span>
-              </div>
-              {data.topLosers.length === 0 ? (
-                <div className="text-xs text-slate-500 px-3 py-4 text-center">Không có dữ liệu</div>
-              ) : (
-                data.topLosers.map((s, i) => (
-                  <MoverRow key={s.ticker} stock={s} rank={i + 1} type="lose" onTickerClick={onTickerClick} />
-                ))
-              )}
-            </div>
-
-            {/* Breadth */}
-            <div className="flex flex-col gap-3">
-              <BreadthBar breadth={data.breadth} />
-
-              {/* Quick stats */}
-              <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3 grid grid-cols-2 gap-2">
-                {[
-                  { label: 'VN-Index vol', value: fmtVol(data.indices[0]?.volume), icon: <Zap size={11} className="text-blue-400" /> },
-                  { label: 'A/D ratio',    value: data.breadth.decline > 0 ? (data.breadth.advance / data.breadth.decline).toFixed(2) : '∞', icon: <Activity size={11} className="text-slate-400" /> },
-                ].map(({ label, value, icon }) => (
-                  <div key={label} className="flex flex-col gap-0.5">
-                    <div className="flex items-center gap-1">
-                      {icon}
-                      <span className="text-[10px] text-slate-500">{label}</span>
-                    </div>
-                    <span className="text-sm font-bold font-mono text-slate-200">{value}</span>
-                  </div>
                 ))}
               </div>
+
+              {/* Top Losers */}
+              <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3">
+                <div className="flex items-center gap-1.5 mb-2 px-1">
+                  <TrendingDown size={13} className="text-rose-400" />
+                  <span className="text-xs font-semibold text-slate-300">Top giảm</span>
+                  <span className="ml-auto text-[10px] text-slate-500">Giá / Vol</span>
+                </div>
+                {data.topLosers.map((s, i) => (
+                  <MoverRow key={s.ticker} stock={s} rank={i + 1} type="lose" onTickerClick={onTickerClick} />
+                ))}
+              </div>
+
+              {/* Breadth + quick stats */}
+              <div className="flex flex-col gap-3">
+                <BreadthBar breadth={data.breadth} />
+                <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3 grid grid-cols-2 gap-2">
+                  {[
+                    {
+                      label: 'VN-Index vol',
+                      value: fmtVol(validIndices[0]?.volume ?? null),
+                      icon: <Zap size={11} className="text-blue-400" />,
+                    },
+                    {
+                      label: 'A/D ratio',
+                      value: data.breadth.decline > 0
+                        ? (data.breadth.advance / data.breadth.decline).toFixed(2)
+                        : '∞',
+                      icon: <Activity size={11} className="text-slate-400" />,
+                    },
+                  ].map(({ label, value, icon }) => (
+                    <div key={label} className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-1">
+                        {icon}
+                        <span className="text-[10px] text-slate-500">{label}</span>
+                      </div>
+                      <span className="text-sm font-bold font-mono text-slate-200">{value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Fallback nếu không có gì cả */}
+          {!hasAnyIndex && !hasMovers && (
+            <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-800/40 border border-slate-700/40 rounded-xl px-4 py-3">
+              <AlertCircle size={12} />
+              Không lấy được dữ liệu thị trường. Yahoo Finance có thể đang giới hạn request — thử lại sau.
+            </div>
+          )}
         </>
       )}
     </div>

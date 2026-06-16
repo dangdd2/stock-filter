@@ -28,6 +28,9 @@ interface TreeNode {
   price?: number;
   marketCap?: number;
   volume?: number;
+  rsi?: number;
+  macd?: number;
+  macdSignal?: number;
   size: number;
   children?: TreeNode[];
   sectorColor?: string;
@@ -137,13 +140,29 @@ const HeatTooltip = ({ active, payload }: TooltipProps) => {
   const isDown = pct != null && pct < 0;
   const vol = d.volume;
   const mc = d.marketCap;
+  const rsi = d.rsi;
+  const macd = d.macd;
+  const macdSignal = d.macdSignal;
+
+  const rsiColor = typeof rsi === 'number'
+    ? rsi >= 70 ? 'text-rose-400' : rsi <= 30 ? 'text-emerald-400' : 'text-slate-300'
+    : 'text-slate-400';
+  const rsiTag = typeof rsi === 'number'
+    ? rsi >= 70 ? 'Quá mua' : rsi <= 30 ? 'Quá bán' : null
+    : null;
+
+  const macdDiff = typeof macd === 'number' && typeof macdSignal === 'number' ? macd - macdSignal : null;
+  const macdColor = macdDiff == null ? 'text-slate-400' : macdDiff > 0 ? 'text-emerald-400' : 'text-rose-400';
+  const macdTag = macdDiff == null ? null : macdDiff > 0 ? 'Bullish' : 'Bearish';
+
   return (
-    <div className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 shadow-xl text-xs">
+    <div className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 shadow-xl text-xs min-w-[180px]">
       <div className="flex items-center gap-2 mb-1">
         <span className="font-bold text-slate-100 text-sm">{d.ticker}</span>
         {isUp   && <TrendingUp   size={13} className="text-emerald-400" />}
         {isDown && <TrendingDown size={13} className="text-rose-400" />}
         {!isUp && !isDown && <Minus size={13} className="text-slate-400" />}
+        <span className="ml-auto text-[10px] text-slate-500">Click để mở chart</span>
       </div>
       <div className="space-y-0.5 text-slate-400">
         <div>Giá: <span className="text-slate-200 font-mono">{d.price?.toLocaleString()} VND</span></div>
@@ -156,6 +175,30 @@ const HeatTooltip = ({ active, payload }: TooltipProps) => {
         {typeof mc === 'number' && <div>Vốn hóa: <span className="text-slate-300 font-mono">
           {mc >= 1e12 ? `${(mc/1e12).toFixed(2)}T` : mc >= 1e9 ? `${(mc/1e9).toFixed(2)}B` : `${(mc/1e6).toFixed(0)}M`}
         </span></div>}
+
+        {(typeof rsi === 'number' || typeof macd === 'number') && (
+          <div className="pt-1 mt-1 border-t border-slate-700 space-y-0.5">
+            {typeof rsi === 'number' && (
+              <div className="flex items-center justify-between gap-2">
+                <span>RSI (14):</span>
+                <span className="flex items-center gap-1">
+                  <span className={`font-mono font-semibold ${rsiColor}`}>{rsi.toFixed(1)}</span>
+                  {rsiTag && <span className={`text-[9px] px-1 rounded ${rsi>=70?'bg-rose-500/20 text-rose-300':'bg-emerald-500/20 text-emerald-300'}`}>{rsiTag}</span>}
+                </span>
+              </div>
+            )}
+            {typeof macd === 'number' && (
+              <div className="flex items-center justify-between gap-2">
+                <span>MACD:</span>
+                <span className="flex items-center gap-1">
+                  <span className={`font-mono font-semibold ${macdColor}`}>{macd.toFixed(2)}</span>
+                  {macdTag && <span className={`text-[9px] px-1 rounded ${macdDiff! > 0 ?'bg-emerald-500/20 text-emerald-300':'bg-rose-500/20 text-rose-300'}`}>{macdTag}</span>}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
         {d.sectorName && d.sectorColor && (
           <div className="flex items-center gap-1.5 mt-1 pt-1 border-t border-slate-700">
             <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: String(d.sectorColor) }} />
@@ -221,6 +264,7 @@ export default function MarketHeatmap({ data, watchlists, onTickerClick }: Props
             name: d.ticker, ticker: d.ticker, sectorName: sector,
             changePct: d.changePct ?? undefined, price: d.price,
             marketCap: d.marketCap ?? undefined, volume: d.volume,
+            rsi: d.rsi ?? undefined, macd: d.macd ?? undefined, macdSignal: d.macdSignal ?? undefined,
             sectorColor: getSectorColor(sector), size: getSize(d),
           })),
         }))
@@ -230,6 +274,7 @@ export default function MarketHeatmap({ data, watchlists, onTickerClick }: Props
       name: d.ticker, ticker: d.ticker, sectorName: getSector(d.ticker),
       changePct: d.changePct ?? undefined, price: d.price,
       marketCap: d.marketCap ?? undefined, volume: d.volume,
+      rsi: d.rsi ?? undefined, macd: d.macd ?? undefined, macdSignal: d.macdSignal ?? undefined,
       sectorColor: getSectorColor(getSector(d.ticker)), size: getSize(d),
     }));
   }, [validData, groupMode, getSize, getSector, getSectorColor]);

@@ -57,7 +57,11 @@ export default function ManageModal({ show, manageWatchlists, setManageWatchlist
                   )}
                   <span className="text-[10px] text-slate-500 shrink-0">{isMaster?'':`${w.tickers.length} tickers`}</span>
                   {!isMaster && (
-                    <button onClick={()=>{ if(nonMasterCount<=1) return; const updated=manageWatchlists.filter(x=>x.id!==w.id); setManageWatchlists(updated); if(activeWatchlistId===w.id) setActiveWatchlistId(updated.find(x=>x.id!==MASTER_ID)?.id??updated[0].id); }}
+                    <button onClick={()=>{
+                        if(nonMasterCount<=1) return;
+                        if(w.tickers.length > 0 && !window.confirm(`Xóa watchlist "${w.name}" (${w.tickers.length} mã)? Hành động này không thể hoàn tác.`)) return;
+                        const updated=manageWatchlists.filter(x=>x.id!==w.id); setManageWatchlists(updated); if(activeWatchlistId===w.id) setActiveWatchlistId(updated.find(x=>x.id!==MASTER_ID)?.id??updated[0].id);
+                      }}
                       disabled={nonMasterCount<=1} className="text-slate-500 hover:text-rose-400 transition-colors p-0.5 rounded disabled:opacity-30 disabled:cursor-not-allowed shrink-0">
                       <Trash2 size={13}/>
                     </button>

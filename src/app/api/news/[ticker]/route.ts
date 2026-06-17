@@ -45,10 +45,42 @@ function analyzeSentiment(text: string): { sentiment: NewsItem['sentiment']; sen
   };
 }
 
+// ── Vietnamese-only filter ───────────────────────────────────
+// Known foreign / wire-service sources to always exclude, regardless of language detection.
+const FOREIGN_SOURCE_BLOCKLIST = [
+  'afp', 'reuters', 'bloomberg', 'ap news', 'associated press', "investor's business daily",
+  'pr newswire', 'business wire', 'globenewswire', 'marketwatch', 'yahoo finance',
+  'cnbc', 'the wall street journal', 'wsj', 'financial times', 'barron', 'seeking alpha',
+  'benzinga', 'zacks', 'motley fool', 'forbes', 'fox business', 'cnn', 'bbc',
+];
+
+// Vietnamese diacritic characters — a strong signal the text is actually Vietnamese.
+const VI_DIACRITICS = /[ăâđêôơưàáạảãằắẳẵặầấậẩẫèéẹẻẽềếệểễìíịỉĩòóọỏõồốộổỗờớợởỡùúụủũừứựửữỳýỵỷỹ]/i;
+
+function isForeignSource(source: string): boolean {
+  const s = source.toLowerCase();
+  return FOREIGN_SOURCE_BLOCKLIST.some(blocked => s.includes(blocked));
+}
+
+function isVietnameseText(text: string): boolean {
+  if (!text) return false;
+  // Strong signal: contains Vietnamese diacritics.
+  if (VI_DIACRITICS.test(text)) return true;
+  // Fallback: count common Vietnamese stopwords/particles that rarely appear in English.
+  const t = ` ${text.toLowerCase()} `;
+  const viMarkers = [' của ', ' và ', ' là ', ' cho ', ' với ', ' trong ', ' đã ', ' sẽ ', ' này ', ' tại ', ' cổ phiếu ', ' chứng khoán ', ' công ty ', ' doanh nghiệp '];
+  return viMarkers.some(m => t.includes(m));
+}
+
+function isVietnameseNews(item: { title: string; description: string; source: string }): boolean {
+  if (isForeignSource(item.source)) return false;
+  return isVietnameseText(item.title) || isVietnameseText(item.description);
+}
+
 // ── Yahoo Finance news ────────────────────────────────────────
 async function fetchYahooNews(ticker: string): Promise<NewsItem[]> {
   const symbol = `${ticker}.VN`;
-  const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${symbol}&newsCount=20&quotesCount=0&enableFuzzyQuery=false&enableEnhancedTrivialQuery=true`;
+  const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${symbol}&newsCount=30&quotesCount=0&enableFuzzyQuery=false&enableEnhancedTrivialQuery=true`;
   const res = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0' },
     signal: AbortSignal.timeout(5000),
@@ -56,7 +88,7 @@ async function fetchYahooNews(ticker: string): Promise<NewsItem[]> {
   if (!res.ok) return [];
   const data = await res.json();
   const newsArr = data?.news ?? [];
-  return newsArr.slice(0, 15).map((n: Record<string, unknown>, i: number) => {
+  return newsArr.slice(0, 30).map((n: Record<string, unknown>, i: number) => {
     const title = String(n.title ?? '');
     const desc  = String(n.summary ?? title);
     const { sentiment, sentimentScore } = analyzeSentiment(title + ' ' + desc);
@@ -90,7 +122,7 @@ async function fetchGoogleNews(ticker: string): Promise<NewsItem[]> {
   if (!res.ok) return [];
   const xml  = await res.text();
   const items = xml.match(/<item>([\s\S]*?)<\/item>/g) ?? [];
-  return items.slice(0, 10).map((item, i) => {
+  return items.slice(0, 20).map((item, i) => {
     const title     = (item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) ?? item.match(/<title>(.*?)<\/title>/))?.[1] ?? '';
     const link      = item.match(/<link>(.*?)<\/link>/)?.[1] ?? '#';
     const pubDate   = item.match(/<pubDate>(.*?)<\/pubDate>/)?.[1] ?? '';
@@ -145,9 +177,14 @@ export async function GET(
     if (!seen.has(key2)) { seen.add(key2); merged.push(item); }
   }
 
+  // Keep only Vietnamese-language news from domestic/Vietnamese sources —
+  // drop foreign wire services (AFP, Reuters, PR Newswire, Investor's Business Daily, etc.)
+  // and any English-language articles that slipped through the ticker search.
+  const vietnameseOnly = merged.filter(isVietnameseNews);
+
   // Sort by publishedAt desc
-  merged.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
-  const final = merged.slice(0, 20);
+  vietnameseOnly.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+  const final = vietnameseOnly.slice(0, 20);
 
   cache.set(key, { items: final, expiresAt: Date.now() + CACHE_TTL });
   return NextResponse.json(final, { headers: { 'X-Cache': 'MISS' } });

@@ -9,6 +9,7 @@ import {
 import type { StockIndicatorResult } from '@/types';
 import type { EntryExitResult } from '@/app/api/entry-exit/[ticker]/route';
 import { loadSignalHistory } from '@/lib/signalHistory';
+import EntryExitZoneChart from '@/components/EntryExitZoneChart';
 
 interface Props {
   item: StockIndicatorResult;
@@ -207,6 +208,22 @@ export default function EntryExitPanel({ item }: Props) {
                 Cập nhật: {new Date(lastFetched).toLocaleTimeString('vi-VN')}
               </p>
             )}
+          </div>
+
+          {/* Visual Zone Chart — entry/exit/stop zones overlaid on price */}
+          <div className="bg-slate-800/50 border border-slate-700/60 rounded-xl p-4">
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <BarChart2 size={11} /> Biểu Đồ Vùng Mua / Bán
+            </p>
+            <EntryExitZoneChart
+              closes={(item.closes60d?.length ? item.closes60d : item.closes6m) ?? []}
+              currentPrice={result.currentPrice}
+              entryZones={result.entryZones}
+              exitZones={result.exitZones}
+              stopLoss={result.stopLoss}
+              support={result.keyLevels.support}
+              resistance={result.keyLevels.resistance}
+            />
           </div>
 
           {/* Warnings */}

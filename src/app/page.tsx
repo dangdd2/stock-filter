@@ -52,6 +52,25 @@ export default function Home() {
   const [stochFilter,  setStochFilter]  = useState<StochFilter>('ALL');
   const [expandedTicker, setExpandedTicker] = useState<string | null>(null);
   const [activeTab,    setActiveTab]    = useState<ActiveTab>('watchlist');
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close "Thêm" dropdown on outside click or Escape
+  useEffect(() => {
+    if (!moreMenuOpen) return;
+    const onClickOutside = (e: MouseEvent) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setMoreMenuOpen(false);
+      }
+    };
+    const onEscape = (e: KeyboardEvent) => { if (e.key === 'Escape') setMoreMenuOpen(false); };
+    document.addEventListener('mousedown', onClickOutside);
+    document.addEventListener('keydown', onEscape);
+    return () => {
+      document.removeEventListener('mousedown', onClickOutside);
+      document.removeEventListener('keydown', onEscape);
+    };
+  }, [moreMenuOpen]);
   const [rowData,      setRowData]      = useState(sd.data);
   const [tableDragIdx, setTableDragIdx] = useState<number | null>(null);
   const [tableDragOverIdx, setTableDragOverIdx] = useState<number | null>(null);
@@ -182,28 +201,35 @@ export default function Home() {
             ];
             const activeInMore = moreTabs.find(t => t.id === activeTab);
             return (
-              <div className="relative group">
-                <button className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors whitespace-nowrap border ${
-                  activeInMore
-                    ? `bg-${activeInMore.cls}-500/20 text-${activeInMore.cls}-300 border-${activeInMore.cls}-500/30 font-semibold`
-                    : 'text-slate-400 hover:bg-slate-700 border-transparent'
-                }`}>
+              <div className="relative" ref={moreMenuRef}>
+                <button
+                  onClick={() => setMoreMenuOpen(v => !v)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors whitespace-nowrap border ${
+                    activeInMore
+                      ? `bg-${activeInMore.cls}-500/20 text-${activeInMore.cls}-300 border-${activeInMore.cls}-500/30 font-semibold`
+                      : moreMenuOpen
+                        ? 'text-slate-200 bg-slate-700 border-slate-600'
+                        : 'text-slate-400 hover:bg-slate-700 border-transparent'
+                  }`}
+                >
                   {activeInMore ? <>{activeInMore.icon} {activeInMore.label}</> : <><MoreVertical size={13}/> Thêm</>}
-                  <ChevronDown size={11} />
+                  <ChevronDown size={11} className={`transition-transform ${moreMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
-                <div className="absolute right-0 top-full mt-1 w-44 bg-slate-900 border border-slate-700 rounded-xl shadow-xl z-50 py-1 hidden group-hover:block">
-                  {moreTabs.map(tab => (
-                    <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                      className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors ${
-                        activeTab === tab.id
-                          ? `bg-${tab.cls}-500/20 text-${tab.cls}-300 font-semibold`
-                          : 'text-slate-400 hover:bg-slate-800'
-                      }`}>
-                      {tab.icon} {tab.label}
-                      {tab.badge ? <span className="ml-auto px-1.5 py-0.5 bg-slate-700 text-slate-300 rounded-full text-[10px] font-bold">{tab.badge}</span> : null}
-                    </button>
-                  ))}
-                </div>
+                {moreMenuOpen && (
+                  <div className="absolute right-0 top-full mt-1.5 w-48 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 py-1.5">
+                    {moreTabs.map(tab => (
+                      <button key={tab.id} onClick={() => { setActiveTab(tab.id); setMoreMenuOpen(false); }}
+                        className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs transition-colors ${
+                          activeTab === tab.id
+                            ? `bg-${tab.cls}-500/20 text-${tab.cls}-300 font-semibold`
+                            : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                        }`}>
+                        {tab.icon} {tab.label}
+                        {tab.badge ? <span className="ml-auto px-1.5 py-0.5 bg-slate-700 text-slate-300 rounded-full text-[10px] font-bold">{tab.badge}</span> : null}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })()}

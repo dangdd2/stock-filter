@@ -67,8 +67,9 @@ export default function EntryExitZoneChart({
           <ComposedChart
             data={data}
             margin={{ top: 10, right: 64, left: 0, bottom: 4 }}
-            onMouseMove={(s) => {
-              const p = s?.activePayload?.[0]?.payload as { price: number } | undefined;
+            onMouseMove={(s: unknown) => {
+              const state = s as { activePayload?: { payload?: { price: number } }[] } | undefined;
+              const p = state?.activePayload?.[0]?.payload;
               setHoverPrice(p ? p.price : null);
             }}
             onMouseLeave={() => setHoverPrice(null)}

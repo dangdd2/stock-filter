@@ -65,8 +65,11 @@ const WickLayer = ({ data, yAxisId }: { data: ChartDataPoint[]; yAxisId?: string
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtVol(v: number) {
-  if (v >= 1e6) return `${(v / 1e6).toFixed(2)}M`;
-  if (v >= 1e3) return `${(v / 1e3).toFixed(0)}K`;
+  const sign = v < 0 ? '-' : '';
+  const av = Math.abs(v);
+  if (av >= 1e9) return `${sign}${(av / 1e9).toFixed(2)}B`;
+  if (av >= 1e6) return `${sign}${(av / 1e6).toFixed(2)}M`;
+  if (av >= 1e3) return `${sign}${(av / 1e3).toFixed(0)}K`;
   return String(v);
 }
 
@@ -92,8 +95,8 @@ export default function ChartView({ ticker }: { ticker: string }) {
   const [showRsiPanel,   setShowRsiPanel]   = useState(() => readToggle('chart_showRsiPanel',   true));
   const [showMacdPanel,  setShowMacdPanel]  = useState(() => readToggle('chart_showMacdPanel',  true));
   const [showStochPanel, setShowStochPanel] = useState(() => readToggle('chart_showStochPanel', false));
-  const [showMfiPanel,   setShowMfiPanel]   = useState(() => readToggle('chart_showMfiPanel',   false));
-  const [showObvPanel,   setShowObvPanel]   = useState(() => readToggle('chart_showObvPanel',   false));
+  const [showMfiPanel,   setShowMfiPanel]   = useState(() => readToggle('chart_showMfiPanel',   true));
+  const [showObvPanel,   setShowObvPanel]   = useState(() => readToggle('chart_showObvPanel',   true));
 
   // Overlay-on-candlestick toggles (compact RSI/MACD line drawn inside the price panel)
   const [showRsiOverlay,  setShowRsiOverlay]  = useState(() => readToggle('chart_showRsiOverlay',  false));
@@ -284,6 +287,8 @@ export default function ChartView({ ticker }: { ticker: string }) {
                 if (d.macdSignal != null)  rows.push({ label: 'Signal', value: d.macdSignal.toFixed(2),                 color: '#f59e0b' });
                 if (d.stochK != null)      rows.push({ label: '%K',     value: d.stochK.toFixed(1),                     color: '#3b82f6' });
                 if (d.stochD != null)      rows.push({ label: '%D',     value: d.stochD.toFixed(1),                     color: '#f59e0b' });
+                if (d.mfi != null)         rows.push({ label: 'MFI',    value: d.mfi.toFixed(1),                        color: '#ec4899' });
+                if (d.obv != null)         rows.push({ label: 'OBV',    value: fmtVol(d.obv),                           color: '#22d3ee' });
                 return (
                   <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '8px 12px', fontSize: 12, minWidth: 160 }}>
                     <div style={{ color: '#94a3b8', fontWeight: 600, marginBottom: 6 }}>{label}</div>

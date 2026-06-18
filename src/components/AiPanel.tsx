@@ -4,8 +4,9 @@ import { Brain, X, TrendingUp, RefreshCw, BarChart2, Target, Newspaper } from 'l
 import { type StockIndicatorResult } from '@/types';
 import NewsPanel from '@/components/NewsPanel';
 import EntryExitPanel from '@/components/EntryExitPanel';
+import ChartView from '@/components/ChartView';
 
-type AiTab = 'analysis' | 'entryexit' | 'news';
+type AiTab = 'chart' | 'analysis' | 'entryexit' | 'news';
 
 const REC_CONFIG: Record<string, { label: string; className: string }> = {
   BUY:        { label: 'BUY',        className: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
@@ -19,7 +20,7 @@ interface BalanceSheetRow { date: string; totalAssets: number|null; totalLiabili
 interface FinancialPeriod { income: IncomeRow[]; cashflow: CashFlowRow[]; balance: BalanceSheetRow[]; }
 interface FinancialsData { annual: FinancialPeriod; quarterly: FinancialPeriod; }
 export default function AiPanel({
-  ticker, content, loading, error, onClose, item,
+  ticker, content, loading, error, onClose, item, onRunAnalysis, initialTab,
 }: {
   ticker: string;
   content: string;
@@ -27,8 +28,10 @@ export default function AiPanel({
   error: string | null;
   onClose: () => void;
   item: StockIndicatorResult;
+  onRunAnalysis?: () => void;
+  initialTab?: AiTab;
 }) {
-  const [aiTab, setAiTab] = useState<AiTab>('analysis');
+  const [aiTab, setAiTab] = useState<AiTab>(initialTab ?? 'chart');
   const [financials, setFinancials] = useState<FinancialsData | null>(null);
   const [finLoading, setFinLoading] = useState(false);
   const [finError, setFinError] = useState<string | null>(null);
@@ -123,6 +126,7 @@ export default function AiPanel({
       {/* Tab bar */}
       <div className="flex gap-1 mb-5 bg-slate-800/60 rounded-lg p-1 border border-slate-700/40">
         {([
+          { id: 'chart' as AiTab, label: 'Biểu Đồ', icon: <BarChart2 size={13} /> },
           { id: 'analysis' as AiTab, label: 'Phân Tích AI', icon: <Brain size={13} /> },
           { id: 'entryexit' as AiTab, label: 'Vào / Ra', icon: <Target size={13} /> },
           { id: 'news' as AiTab, label: 'Tin Tức', icon: <Newspaper size={13} /> },
@@ -140,6 +144,11 @@ export default function AiPanel({
           </button>
         ))}
       </div>
+
+      {/* Chart tab */}
+      {aiTab === 'chart' && (
+        <ChartView ticker={ticker} />
+      )}
 
       {/* Entry/Exit tab */}
       {aiTab === 'entryexit' && (
@@ -160,10 +169,25 @@ export default function AiPanel({
       )}
       {!error && (
         <div className="prose prose-invert prose-sm max-w-none mb-6">
-          <pre className="whitespace-pre-wrap font-sans text-sm text-slate-300 leading-relaxed">
-            {bodyText || (loading ? '' : 'No content.')}
-            {loading && <span className="inline-block w-2 h-4 bg-violet-400 animate-pulse ml-0.5 align-middle" />}
-          </pre>
+          {!bodyText && !loading ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
+              <Brain size={28} className="text-violet-400/60" />
+              <p className="text-sm text-slate-500">Chưa có phân tích AI cho {ticker}.</p>
+              {onRunAnalysis && (
+                <button
+                  onClick={onRunAnalysis}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-violet-500/15 text-violet-300 border border-violet-500/30 hover:bg-violet-500/25 rounded-lg text-xs font-medium transition-colors"
+                >
+                  <Brain size={13} /> Bắt đầu phân tích
+                </button>
+              )}
+            </div>
+          ) : (
+            <pre className="whitespace-pre-wrap font-sans text-sm text-slate-300 leading-relaxed">
+              {bodyText}
+              {loading && <span className="inline-block w-2 h-4 bg-violet-400 animate-pulse ml-0.5 align-middle" />}
+            </pre>
+          )}
         </div>
       )}
 

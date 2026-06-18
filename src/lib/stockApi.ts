@@ -298,6 +298,8 @@ export interface StockChartData {
   bbUpper: number | null;
   bbMiddle: number | null;
   bbLower: number | null;
+  mfi: number | null;
+  obv: number | null;
 }
 
 export async function fetchStockChartData(ticker: string): Promise<StockChartData[]> {
@@ -365,16 +367,29 @@ export async function fetchStockChartData(ticker: string): Promise<StockChartDat
 
     const bbValuesChart = BollingerBands.calculate({ values: closePrices, period: 20, stdDev: 2 });
 
+    const highPrices = validData.map(d => d.high);
+    const lowPrices = validData.map(d => d.low);
+    const volumeSeriesChart = validData.map(d => d.volume);
+
+    const mfiValues = MFI.calculate({
+      high: highPrices, low: lowPrices, close: closePrices, volume: volumeSeriesChart, period: 14,
+    });
+    const obvValues = OBV.calculate({ close: closePrices, volume: volumeSeriesChart });
+
     const rsiOffset = validData.length - rsiValues.length;
     const macdOffset = validData.length - macdValues.length;
     const stochOffset = validData.length - stochRsiValues.length;
     const bbOffset = validData.length - bbValuesChart.length;
+    const mfiOffset = validData.length - mfiValues.length;
+    const obvOffset = validData.length - obvValues.length;
 
     return validData.map((d, index) => {
       const rsi = index >= rsiOffset ? rsiValues[index - rsiOffset] : null;
       const macd = index >= macdOffset ? macdValues[index - macdOffset] : null;
       const stoch = index >= stochOffset ? stochRsiValues[index - stochOffset] : null;
       const bb = index >= bbOffset ? bbValuesChart[index - bbOffset] : null;
+      const mfi = index >= mfiOffset ? mfiValues[index - mfiOffset] : null;
+      const obv = index >= obvOffset ? obvValues[index - obvOffset] : null;
 
       return {
         time: d.time,
@@ -392,6 +407,8 @@ export async function fetchStockChartData(ticker: string): Promise<StockChartDat
         bbUpper: bb?.upper ?? null,
         bbMiddle: bb?.middle ?? null,
         bbLower: bb?.lower ?? null,
+        mfi: mfi ?? null,
+        obv: obv ?? null,
       };
     });
   } catch (error: unknown) {

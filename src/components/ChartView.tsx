@@ -18,6 +18,7 @@ interface ChartDataPoint {
   ma20?: number; ma50?: number;
   volume?: number; volumeMa?: number;
   bbUpper?: number | null; bbMiddle?: number | null; bbLower?: number | null;
+  mfi?: number | null; obv?: number | null;
 }
 
 // ─── Custom renderers ─────────────────────────────────────────────────────────
@@ -86,11 +87,13 @@ export default function ChartView({ ticker }: { ticker: string }) {
   const [showMA50, setShowMA50] = useState(() => readToggle('chart_showMA50', false));
   const [showBB,   setShowBB]   = useState(() => readToggle('chart_showBB',   true));
 
-  // Sub-panel toggles (Volume / RSI / MACD / Stoch) — persisted in localStorage
+  // Sub-panel toggles (Volume / RSI / MACD / Stoch / MFI / OBV) — persisted in localStorage
   const [showVolPanel,   setShowVolPanel]   = useState(() => readToggle('chart_showVolPanel',   true));
   const [showRsiPanel,   setShowRsiPanel]   = useState(() => readToggle('chart_showRsiPanel',   true));
   const [showMacdPanel,  setShowMacdPanel]  = useState(() => readToggle('chart_showMacdPanel',  true));
   const [showStochPanel, setShowStochPanel] = useState(() => readToggle('chart_showStochPanel', false));
+  const [showMfiPanel,   setShowMfiPanel]   = useState(() => readToggle('chart_showMfiPanel',   false));
+  const [showObvPanel,   setShowObvPanel]   = useState(() => readToggle('chart_showObvPanel',   false));
 
   // Overlay-on-candlestick toggles (compact RSI/MACD line drawn inside the price panel)
   const [showRsiOverlay,  setShowRsiOverlay]  = useState(() => readToggle('chart_showRsiOverlay',  false));
@@ -103,6 +106,8 @@ export default function ChartView({ ticker }: { ticker: string }) {
   useEffect(() => { localStorage.setItem('chart_showRsiPanel',   String(showRsiPanel));   }, [showRsiPanel]);
   useEffect(() => { localStorage.setItem('chart_showMacdPanel',  String(showMacdPanel));  }, [showMacdPanel]);
   useEffect(() => { localStorage.setItem('chart_showStochPanel', String(showStochPanel)); }, [showStochPanel]);
+  useEffect(() => { localStorage.setItem('chart_showMfiPanel',   String(showMfiPanel));   }, [showMfiPanel]);
+  useEffect(() => { localStorage.setItem('chart_showObvPanel',   String(showObvPanel));   }, [showObvPanel]);
   useEffect(() => { localStorage.setItem('chart_showRsiOverlay',  String(showRsiOverlay));  }, [showRsiOverlay]);
   useEffect(() => { localStorage.setItem('chart_showMacdOverlay', String(showMacdOverlay)); }, [showMacdOverlay]);
 
@@ -156,12 +161,14 @@ export default function ChartView({ ticker }: { ticker: string }) {
     { label: 'BB',   color: '#a78bfa', active: showBB,   set: setShowBB   },
   ] as const;
 
-  // Sub-panel toggles config (Vol / RSI / MACD / Stoch)
+  // Sub-panel toggles config (Vol / RSI / MACD / Stoch / MFI / OBV)
   const panelToggles = [
     { label: 'Vol',   color: '#64748b', active: showVolPanel,   set: setShowVolPanel   },
     { label: 'RSI',   color: '#a78bfa', active: showRsiPanel,   set: setShowRsiPanel   },
     { label: 'MACD',  color: '#3b82f6', active: showMacdPanel,  set: setShowMacdPanel  },
     { label: 'Stoch', color: '#f59e0b', active: showStochPanel, set: setShowStochPanel },
+    { label: 'MFI',   color: '#ec4899', active: showMfiPanel,   set: setShowMfiPanel   },
+    { label: 'OBV',   color: '#22d3ee', active: showObvPanel,   set: setShowObvPanel   },
   ] as const;
 
   // Overlay-on-candle toggles config (RSI/MACD mini-line drawn inside price panel)
@@ -482,6 +489,8 @@ export default function ChartView({ ticker }: { ticker: string }) {
           { title: 'RSI (14)',       key: 'rsi',    visible: showRsiPanel,   ticks: [30, 70] as number[], refs: [{ y: 70, s: '#f43f5e' }, { y: 30, s: '#10b981' }], domain: [0, 100] as [number, number] },
           { title: 'MACD (12,26,9)', key: 'macd',   visible: showMacdPanel,  ticks: undefined,            refs: [],                                                   domain: undefined },
           { title: 'Stochastic RSI', key: 'stochK', visible: showStochPanel, ticks: [20, 80] as number[], refs: [{ y: 80, s: '#f43f5e' }, { y: 20, s: '#10b981' }], domain: [0, 100] as [number, number] },
+          { title: 'MFI (14)',       key: 'mfi',    visible: showMfiPanel,   ticks: [20, 80] as number[], refs: [{ y: 80, s: '#f43f5e' }, { y: 20, s: '#10b981' }], domain: [0, 100] as [number, number] },
+          { title: 'OBV',            key: 'obv',    visible: showObvPanel,   ticks: undefined,            refs: [],                                                   domain: undefined },
         ] as const
       ).filter(p => p.visible).map(({ title, key, ticks, refs, domain }) => (
         <div key={key} className="w-full mt-4" style={{ height: 120 }}>
@@ -517,8 +526,19 @@ export default function ChartView({ ticker }: { ticker: string }) {
                   <Line type="monotone" dataKey="stochK" stroke="#3b82f6" strokeWidth={1.5} dot={false} name="%K" connectNulls />
                   <Line type="monotone" dataKey="stochD" stroke="#f59e0b" strokeWidth={1.5} dot={false} name="%D" connectNulls />
                 </>
+              ) : key === 'obv' ? (
+                <>
+                  <defs>
+                    <linearGradient id="obvFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.25} />
+                      <stop offset="100%" stopColor="#22d3ee" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="obv" stroke="none" fill="url(#obvFill)" isAnimationActive={false} connectNulls />
+                  <Line type="monotone" dataKey="obv" stroke="#22d3ee" strokeWidth={1.5} dot={false} name="OBV" connectNulls />
+                </>
               ) : (
-                <Line type="monotone" dataKey={key} stroke="#a78bfa" strokeWidth={1.5} dot={false} name={key.toUpperCase()} connectNulls />
+                <Line type="monotone" dataKey={key} stroke={key === 'mfi' ? '#ec4899' : '#a78bfa'} strokeWidth={1.5} dot={false} name={key.toUpperCase()} connectNulls />
               )}
             </ComposedChart>
           </ResponsiveContainer>

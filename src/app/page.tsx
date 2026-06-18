@@ -514,7 +514,7 @@ export default function Home() {
                             <td className="px-4 py-4">{item.macdHistogram!=null?(()=>{const pos=item.macdHistogram>0;return<div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-mono text-xs font-bold tabular-nums ${pos?'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300':'bg-rose-500/15 border border-rose-500/30 text-rose-300'}`}><span>{pos?'▲':'▼'}</span><span>{item.macdHistogram.toFixed(1)}</span></div>;})():<span className="text-slate-500 text-xs">-</span>}</td>
                             <td className="px-4 py-4 text-right"><div className="flex justify-end gap-2">
                               <button onClick={()=>setExpandedTicker(p=>p===item.ticker?null:item.ticker)} className={`p-1.5 rounded-md transition-colors border ${isExpanded?'bg-slate-700 text-slate-200 border-slate-600':'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>{isExpanded?<X size={16}/>:<BarChart2 size={16}/>}</button>
-                              <button onClick={()=>ai.runAnalysis(item)} disabled={ai.aiLoading&&ai.aiTicker!==item.ticker} className={`p-1.5 rounded-md transition-colors border ${ai.aiTicker===item.ticker?'bg-violet-500/20 text-violet-300 border-violet-500/30':'bg-violet-500/10 text-violet-400 border-violet-500/20 hover:bg-violet-500/20'} disabled:opacity-40`}>{ai.aiLoading&&ai.aiTicker===item.ticker?<RefreshCw size={16} className="animate-spin"/>:<Brain size={16}/>}</button>
+                              <button onClick={()=>{ setExpandedTicker(item.ticker); ai.runAnalysis(item); }} disabled={ai.aiLoading&&ai.aiTicker!==item.ticker} className={`p-1.5 rounded-md transition-colors border ${ai.aiTicker===item.ticker?'bg-violet-500/20 text-violet-300 border-violet-500/30':'bg-violet-500/10 text-violet-400 border-violet-500/20 hover:bg-violet-500/20'} disabled:opacity-40`}>{ai.aiLoading&&ai.aiTicker===item.ticker?<RefreshCw size={16} className="animate-spin"/>:<Brain size={16}/>}</button>
                               <button onClick={()=>wl.removeTicker(item.ticker)} className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-md transition-colors"><Trash2 size={16}/></button>
                             </div></td>
                           </tr>
@@ -540,42 +540,61 @@ export default function Home() {
         handleModalDrop={wl.handleModalDrop} handleModalDragEnd={wl.handleModalDragEnd}
       />
 
-      {/* ── Ticker Detail Modal — chart popup instead of inline expand ── */}
-      {expandedTicker && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
-          onClick={e => { if (e.target === e.currentTarget) setExpandedTicker(null); }}
-        >
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-y-auto relative">
-            <button
-              onClick={() => setExpandedTicker(null)}
-              className="absolute top-4 right-4 z-10 p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 rounded-lg transition-colors border border-slate-700"
-            >
-              <X size={16} />
-            </button>
-            <ChartView ticker={expandedTicker} />
-          </div>
-        </div>
-      )}
-
-      {/* ── AI Analysis Modal — chart popup instead of inline expand ── */}
-      {ai.aiTicker && (() => {
-        const aiItem = rowData.find(d => d.ticker === ai.aiTicker) ?? sd.data.find(d => d.ticker === ai.aiTicker);
-        if (!aiItem) return null;
+      {/* ── Ticker Detail Modal — full-screen, merges Chart + AI Analysis ── */}
+      {expandedTicker && (() => {
+        const detailItem = rowData.find(d => d.ticker === expandedTicker) ?? sd.data.find(d => d.ticker === expandedTicker);
+        const closeModal = () => { setExpandedTicker(null); ai.closeAi(); };
         return (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
-            onClick={e => { if (e.target === e.currentTarget) ai.closeAi(); }}
+            className="fixed inset-0 z-50 flex flex-col bg-slate-950"
+            onClick={e => { if (e.target === e.currentTarget) closeModal(); }}
           >
-            <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto relative">
-              <AiPanel
-                ticker={ai.aiTicker}
-                content={ai.aiContent}
-                loading={ai.aiLoading}
-                error={ai.aiError}
-                onClose={ai.closeAi}
-                item={aiItem}
-              />
+            {/* Top bar */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 bg-slate-900 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <BarChart2 size={16} className="text-blue-400" />
+                <span className="font-bold text-slate-100">{expandedTicker}</span>
+                <span className="text-xs text-slate-500">Chi tiết & Phân tích AI</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {detailItem && (
+                  <button
+                    onClick={() => ai.runAnalysis(detailItem)}
+                    disabled={ai.aiLoading && ai.aiTicker !== expandedTicker}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors border ${
+                      ai.aiTicker === expandedTicker
+                        ? 'bg-violet-500/20 text-violet-300 border-violet-500/30'
+                        : 'bg-violet-500/10 text-violet-400 border-violet-500/20 hover:bg-violet-500/20'
+                    } disabled:opacity-40`}
+                  >
+                    {ai.aiLoading && ai.aiTicker === expandedTicker
+                      ? <RefreshCw size={13} className="animate-spin" />
+                      : <Brain size={13} />}
+                    {ai.aiTicker === expandedTicker ? 'Đang phân tích / Ẩn' : 'Phân tích AI'}
+                  </button>
+                )}
+                <button
+                  onClick={closeModal}
+                  className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 rounded-lg transition-colors border border-slate-700"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Scrollable content */}
+            <div className="flex-1 overflow-y-auto">
+              <ChartView ticker={expandedTicker} />
+              {ai.aiTicker === expandedTicker && detailItem && (
+                <AiPanel
+                  ticker={expandedTicker}
+                  content={ai.aiContent}
+                  loading={ai.aiLoading}
+                  error={ai.aiError}
+                  onClose={ai.closeAi}
+                  item={detailItem}
+                />
+              )}
             </div>
           </div>
         );

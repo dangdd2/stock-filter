@@ -33,7 +33,52 @@ interface LiveTickerContext {
   signal: string;
   score: number;
   recentNews: string[];
+  support: number[];
+  resistance: number[];
+  atr: number | null;
+  suggestedEntry: { from: number; to: number } | null;
+  suggestedTarget1: number | null;
+  suggestedTarget2: number | null;
+  suggestedStopLoss: number | null;
+  riskReward: number | null;
   error?: string;
+}
+
+function computeSupportResistance(highs: number[], lows: number[], current: number): { support: number[]; resistance: number[] } {
+  if (!highs.length) return { support: [], resistance: [] };
+  const levels: number[] = [];
+  const len = Math.min(highs.length, lows.length);
+  for (let i = 2; i < len - 2; i++) {
+    if (highs[i] >= highs[i - 1] && highs[i] >= highs[i - 2] && highs[i] >= highs[i + 1] && highs[i] >= highs[i + 2]) levels.push(highs[i]);
+    if (lows[i] <= lows[i - 1] && lows[i] <= lows[i - 2] && lows[i] <= lows[i + 1] && lows[i] <= lows[i + 2]) levels.push(lows[i]);
+  }
+  const clustered: number[] = [];
+  const used = new Set<number>();
+  for (const lvl of [...levels].sort((a, b) => a - b)) {
+    if (used.has(lvl)) continue;
+    const cluster = levels.filter(l => !used.has(l) && Math.abs(l - lvl) / lvl < 0.015);
+    const avg = cluster.reduce((a, b) => a + b, 0) / cluster.length;
+    cluster.forEach(l => used.add(l));
+    clustered.push(Math.round(avg));
+  }
+  const support    = clustered.filter(l => l < current * 1.02).sort((a, b) => b - a).slice(0, 3);
+  const resistance = clustered.filter(l => l > current * 0.98).sort((a, b) => a - b).slice(0, 3);
+  return { support, resistance };
+}
+
+function computeATR(highs: number[], lows: number[], closes: number[], period = 14): number | null {
+  if (closes.length < period + 1) return null;
+  const trs: number[] = [];
+  for (let i = 1; i < closes.length; i++) {
+    const tr = Math.max(
+      highs[i] - lows[i],
+      Math.abs(highs[i] - closes[i - 1]),
+      Math.abs(lows[i] - closes[i - 1]),
+    );
+    trs.push(tr);
+  }
+  const last = trs.slice(-period);
+  return last.reduce((a, b) => a + b, 0) / last.length;
 }
 
 async function fetchLiveContext(ticker: string): Promise<LiveTickerContext> {
@@ -44,7 +89,11 @@ async function fetchLiveContext(ticker: string): Promise<LiveTickerContext> {
     rsi: null, macdHistogram: null, macdTrend: 'N/A', stochK: null,
     stochZone: 'N/A', bbUpper: null, bbLower: null, bbPosition: 'N/A',
     sma20: null, sma50: null, ema20: null, trendVsSma20: 'N/A', trendVsSma50: 'N/A',
-    signal: 'N/A', score: 0, recentNews: [], error: err,
+    signal: 'N/A', score: 0, recentNews: [],
+    support: [], resistance: [], atr: null,
+    suggestedEntry: null, suggestedTarget1: null, suggestedTarget2: null,
+    suggestedStopLoss: null, riskReward: null,
+    error: err,
   });
 
   try {
@@ -122,6 +171,30 @@ async function fetchLiveContext(ticker: string): Promise<LiveTickerContext> {
 
     const signal = score >= 3 ? 'Mua mạnh (Strong Buy)' : score >= 1 ? 'Mua (Buy)' : score <= -3 ? 'Bán mạnh (Strong Sell)' : score <= -1 ? 'Bán (Sell)' : 'Trung lập (Neutral)';
 
+    const { support, resistance } = computeSupportResistance(highs, lows, price);
+    const atr = computeATR(highs, lows, closes);
+
+    // Suggested entry zone: nearest support below price (or small pullback band if no clear support)
+    const nearestSupport = support[0] ?? null;
+    const suggestedEntry = nearestSupport != null
+      ? { from: Math.round(nearestSupport), to: Math.round(nearestSupport * 1.01) }
+      : atr != null
+        ? { from: Math.round(price - atr), to: Math.round(price - atr * 0.5) }
+        : null;
+
+    // Targets: nearest resistance levels above price; fallback to ATR-based projection
+    const suggestedTarget1 = resistance[0] != null ? Math.round(resistance[0]) : atr != null ? Math.round(price + atr * 1.5) : null;
+    const suggestedTarget2 = resistance[1] != null ? Math.round(resistance[1]) : atr != null ? Math.round(price + atr * 3) : null;
+
+    // Stop loss: below nearest support minus a buffer, or ATR-based
+    const suggestedStopLoss = nearestSupport != null
+      ? Math.round(nearestSupport * 0.97)
+      : atr != null ? Math.round(price - atr * 2) : null;
+
+    const riskReward = suggestedEntry != null && suggestedTarget1 != null && suggestedStopLoss != null
+      ? parseFloat((((suggestedTarget1 - suggestedEntry.from) / (suggestedEntry.from - suggestedStopLoss)) || 0).toFixed(2))
+      : null;
+
     return {
       ticker, price, change1d: pct(price, ago(1)), change1w: pct(price, ago(5)),
       change1m: pct(price, ago(21)), high52w: Math.max(...highs), low52w: Math.min(...lows),
@@ -129,6 +202,8 @@ async function fetchLiveContext(ticker: string): Promise<LiveTickerContext> {
       rsi, macdHistogram, macdTrend, stochK, stochZone, bbUpper: bbLast?.upper ?? null,
       bbLower: bbLast?.lower ?? null, bbPosition, sma20, sma50, ema20,
       trendVsSma20, trendVsSma50, signal, score, recentNews,
+      support, resistance, atr,
+      suggestedEntry, suggestedTarget1, suggestedTarget2, suggestedStopLoss, riskReward,
     };
   } catch (e) {
     return empty(e instanceof Error ? e.message : 'Unknown error');
@@ -139,21 +214,33 @@ function buildContextBlock(ctx: LiveTickerContext): string {
   if (ctx.error) return `\n[${ctx.ticker}] Không thể tải dữ liệu: ${ctx.error}\n`;
   const n = (v: number | null, d = 2) => v == null ? 'N/A' : v.toFixed(d);
   const p = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
+  const fmt = (v: number) => v.toLocaleString('vi-VN');
   return `
 === DỮ LIỆU THỰC ${ctx.ticker} (cập nhật ngay lúc này) ===
-Giá hiện tại: ${ctx.price.toLocaleString('vi-VN')} VNĐ
+Giá hiện tại: ${fmt(ctx.price)} VNĐ
 Thay đổi: 1N ${p(ctx.change1d)} | 1T ${p(ctx.change1w)} | 1M ${p(ctx.change1m)}
-52T Đỉnh/Đáy: ${ctx.high52w.toLocaleString()} / ${ctx.low52w.toLocaleString()}
+52T Đỉnh/Đáy: ${fmt(ctx.high52w)} / ${fmt(ctx.low52w)}
 Volume hôm nay: ${(ctx.volume / 1e6).toFixed(2)}M cp | Avg20d: ${(ctx.avgVolume20d / 1e6).toFixed(2)}M cp
 
 Chỉ số kỹ thuật:
 - RSI(14): ${n(ctx.rsi)} ${ctx.rsi != null ? (ctx.rsi < 30 ? '← QUÁ BÁN' : ctx.rsi > 70 ? '← QUÁ MUA' : '') : ''}
 - MACD Histogram: ${n(ctx.macdHistogram, 4)} | Xu hướng: ${ctx.macdTrend}
 - Stochastic K: ${n(ctx.stochK)} | Vùng: ${ctx.stochZone}
-- Bollinger Bands: Upper ${ctx.bbUpper?.toLocaleString() ?? 'N/A'} | Lower ${ctx.bbLower?.toLocaleString() ?? 'N/A'} | Vị trí: ${ctx.bbPosition}
-- SMA20: ${ctx.sma20?.toLocaleString() ?? 'N/A'} | ${ctx.trendVsSma20}
-- SMA50: ${ctx.sma50?.toLocaleString() ?? 'N/A'} | ${ctx.trendVsSma50}
-- EMA20: ${ctx.ema20?.toLocaleString() ?? 'N/A'}
+- Bollinger Bands: Upper ${ctx.bbUpper ? fmt(ctx.bbUpper) : 'N/A'} | Lower ${ctx.bbLower ? fmt(ctx.bbLower) : 'N/A'} | Vị trí: ${ctx.bbPosition}
+- SMA20: ${ctx.sma20 ? fmt(ctx.sma20) : 'N/A'} | ${ctx.trendVsSma20}
+- SMA50: ${ctx.sma50 ? fmt(ctx.sma50) : 'N/A'} | ${ctx.trendVsSma50}
+- EMA20: ${ctx.ema20 ? fmt(ctx.ema20) : 'N/A'}
+- ATR(14): ${ctx.atr != null ? fmt(Math.round(ctx.atr)) : 'N/A'} (biến động trung bình/ngày)
+
+Vùng hỗ trợ (support, gần → xa): ${ctx.support.length ? ctx.support.map(fmt).join(' | ') : 'Chưa xác định rõ'}
+Vùng kháng cự (resistance, gần → xa): ${ctx.resistance.length ? ctx.resistance.map(fmt).join(' | ') : 'Chưa xác định rõ'}
+
+★ KẾ HOẠCH GIAO DỊCH GỢI Ý (tính sẵn từ pivot S/R + ATR — dùng các số này khi trả lời, KHÔNG tự bịa số khác):
+- Vùng vào lệnh (entry): ${ctx.suggestedEntry ? `${fmt(ctx.suggestedEntry.from)} – ${fmt(ctx.suggestedEntry.to)}` : 'N/A'}
+- Mục tiêu 1 (target 1): ${ctx.suggestedTarget1 ? fmt(ctx.suggestedTarget1) : 'N/A'}
+- Mục tiêu 2 (target 2): ${ctx.suggestedTarget2 ? fmt(ctx.suggestedTarget2) : 'N/A'}
+- Cắt lỗ (stop loss): ${ctx.suggestedStopLoss ? fmt(ctx.suggestedStopLoss) : 'N/A'}
+- Tỷ lệ Risk/Reward (đến target 1): ${ctx.riskReward != null ? `1 : ${ctx.riskReward}` : 'N/A'}
 
 Tổng hợp tín hiệu: ${ctx.signal} (điểm: ${ctx.score > 0 ? '+' : ''}${ctx.score}/5)
 ${ctx.recentNews.length ? `\nTin tức gần đây:\n${ctx.recentNews.map((t, i) => `${i + 1}. ${t}`).join('\n')}` : ''}
@@ -176,12 +263,17 @@ const SYSTEM = `Bạn là trợ lý phân tích chứng khoán Việt Nam thông
 Nguyên tắc trả lời:
 - Luôn dùng tiếng Việt, chuyên nghiệp nhưng dễ hiểu
 - Khi có dữ liệu thực của mã cổ phiếu trong context, hãy phân tích DỰA TRÊN SỐ LIỆU ĐÓ, không nói chung chung
-- Trích dẫn con số cụ thể (giá, RSI, %, v.v.)
-- Đưa ra nhận định dứt khoát, tránh mơ hồ
-- Với câu hỏi phân tích mã cụ thể: đề cập tín hiệu kỹ thuật, xu hướng ngắn/trung hạn, vùng support/resistance
-- Với câu hỏi thị trường chung: phân tích breadth, sector rotation, macro
-- Cuối mỗi phân tích cụ thể, đưa ra 1 khuyến nghị hành động rõ ràng
-- Format dùng markdown (bold, bullet points) cho dễ đọc`;
+- Trích dẫn con số cụ thể (giá, RSI, %, vùng giá, v.v.) — KHÔNG bịa số, chỉ dùng số có trong context
+- TUYỆT ĐỐI KHÔNG trả lời mơ hồ kiểu "chờ đợi và quan sát thêm", "có thể tăng có thể giảm", "theo dõi thêm tín hiệu". Đây là câu trả lời VÔ DỤNG với nhà đầu tư. Luôn đưa ra hành động cụ thể.
+- Khi context có "KẾ HOẠCH GIAO DỊCH GỢI Ý" (entry/target/stop loss/risk-reward), LUÔN trích dẫn các số này trong phần khuyến nghị — đây là số đã được tính toán sẵn từ pivot support/resistance + ATR, đáng tin cậy hơn số tự suy luận
+- Với câu hỏi phân tích mã cụ thể, cấu trúc câu trả lời theo thứ tự:
+  1. Nhận định nhanh: xu hướng hiện tại + tín hiệu nổi bật nhất (1-2 câu)
+  2. Phân tích kỹ thuật: RSI/MACD/Stoch/BB — chỉ nêu cái có ý nghĩa, không liệt kê máy móc tất cả
+  3. Vùng giá hành động: entry cụ thể, target 1 + target 2, stop loss, risk/reward — LẤY TỪ "KẾ HOẠCH GIAO DỊCH GỢI Ý" nếu có
+  4. Khuyến nghị dứt khoát: MUA / BÁN / GIỮ / ĐỨNG NGOÀI — chọn 1, kèm điều kiện kích hoạt rõ ràng (ví dụ: "Mua nếu giá hồi về vùng X, cắt lỗ nếu phá Y")
+- Nếu dữ liệu không đủ để có vùng giá cụ thể (atr/support N/A), nói rõ lý do, không tự bịa số thay thế
+- Với câu hỏi thị trường chung: phân tích breadth, sector rotation, macro — vẫn cần kết luận hành động cụ thể, không lửng lơ
+- Format dùng markdown (bold, bullet points) cho dễ đọc, súc tích, tránh lặp lại số liệu nhiều lần`;
 
 // ─── Route handler ─────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
@@ -218,8 +310,8 @@ export async function POST(req: NextRequest) {
         { role: 'system', content: systemWithContext },
         ...messages.slice(-12), // keep last 12 turns for context window
       ],
-      max_tokens: 1500,
-      temperature: 0.5,
+      max_tokens: 1800,
+      temperature: 0.4,
       stream: true,
     });
 

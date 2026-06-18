@@ -39,6 +39,7 @@ export function useWatchlists() {
   const addTicker = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTicker.trim() || !activeWatchlist) return;
+    if (activeWatchlist.id === MASTER_ID) return; // MASTER is derived via Sync, not directly editable
     const toAdd = newTicker.split(',').map(t => t.trim().toUpperCase()).filter(t => t && !activeWatchlist.tickers.includes(t));
     if (!toAdd.length) { setNewTicker(''); return; }
     setWatchlists(prev => prev.map(w => w.id === activeWatchlistId ? { ...w, tickers: [...w.tickers, ...toAdd] } : w));

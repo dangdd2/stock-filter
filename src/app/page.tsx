@@ -7,7 +7,7 @@ import {
   Activity, TrendingUp, TrendingDown, Filter, AlertCircle, RefreshCw,
   BarChart2, X, Plus, Trash2, Brain, GripVertical, Settings2, EyeOff,
   History, Map as MapIcon, SlidersHorizontal, HelpCircle, MoreVertical,
-  RefreshCcw, Bell, LayoutGrid, Layers, GitFork, Columns2, PieChart, MessageSquare, UserSearch, ChevronDown, Waves,
+  RefreshCcw, Bell, LayoutGrid, Layers, GitFork, Columns2, PieChart, MessageSquare, UserSearch, ChevronDown, Waves, Info,
 } from 'lucide-react';
 
 import { type RsiFilter, type MacdFilter, type StochFilter, MASTER_ID } from '@/types';
@@ -76,6 +76,8 @@ export default function Home() {
   const [tableDragOverIdx, setTableDragOverIdx] = useState<number | null>(null);
   const [ignoredSignalTickers, setIgnoredSignalTickers] = useState<string[]>([]);
   const pendingExpandTicker = useRef<string | null>(null);
+  const [signalConvictionFilter, setSignalConvictionFilter] = useState<0 | 1 | 2 | 3>(0); // 0 = all
+  const [signalExpanded, setSignalExpanded] = useState<{ buy: boolean; sell: boolean }>({ buy: true, sell: false });
 
   useEffect(() => {
     const s = localStorage.getItem('vn_stock_ignored_signals');
@@ -371,11 +373,18 @@ export default function Home() {
                 <button onClick={wl.createWatchlist} className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 rounded-md text-xs transition-colors"><Plus size={12}/> New</button>
               </div>
             ))}
-            <form onSubmit={wl.addTicker} className="flex gap-2">
-              <input type="text" placeholder="Add ticker (e.g. VCB)" value={wl.newTicker} onChange={e => wl.setNewTicker(e.target.value)}
-                className="bg-slate-900 border border-slate-700 rounded-md px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 w-44"/>
-              <button type="submit" className="p-1.5 bg-blue-500 hover:bg-blue-600 rounded-md text-white transition-colors"><Plus size={15}/></button>
-            </form>
+            {wl.activeWatchlistId === MASTER_ID ? (
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 bg-slate-900/50 border border-slate-700/50 rounded-md px-2.5 py-1.5">
+                <Info size={12} className="text-slate-500 shrink-0" />
+                <span>"All Tickers" tự tổng hợp từ các watchlist con — chọn watchlist khác để thêm mã.</span>
+              </div>
+            ) : (
+              <form onSubmit={wl.addTicker} className="flex gap-2">
+                <input type="text" placeholder="Add ticker (e.g. VCB)" value={wl.newTicker} onChange={e => wl.setNewTicker(e.target.value)}
+                  className="bg-slate-900 border border-slate-700 rounded-md px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 w-44"/>
+                <button type="submit" className="p-1.5 bg-blue-500 hover:bg-blue-600 rounded-md text-white transition-colors"><Plus size={15}/></button>
+              </form>
+            )}
             <div className="w-px h-6 bg-slate-700 mx-1 hidden sm:block"/>
             <div className="flex items-center gap-2 flex-wrap">
               <Filter size={14} className="text-slate-400 shrink-0"/>
@@ -403,15 +412,34 @@ export default function Home() {
                 {sd.loading && <RefreshCw size={11} className="animate-spin text-slate-400 ml-1"/>}
                 <span className="text-xs text-slate-500">— {wl.activeWatchlist?.name ?? 'All Tickers'}</span>
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 border border-slate-600 text-slate-400 tracking-wide">sorted by conviction</span>
+                <div className="ml-auto flex items-center gap-1.5">
+                  <span className="text-[10px] text-slate-500 mr-0.5">Conviction:</span>
+                  {([0, 3, 2, 1] as const).map(lvl => (
+                    <button key={lvl} onClick={() => setSignalConvictionFilter(lvl)}
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-semibold transition-colors border ${
+                        signalConvictionFilter === lvl
+                          ? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                          : 'text-slate-500 border-transparent hover:bg-slate-700 hover:text-slate-300'
+                      }`}>
+                      {lvl === 0 ? 'Tất cả' : `${lvl}/3`}
+                    </button>
+                  ))}
+                </div>
               </div>
-              {[{ signals: buySignals, dir: 'buy' as const }, { signals: sellSignals, dir: 'sell' as const }].map(({ signals, dir }) =>
-                signals.length > 0 ? (
+              {[{ signals: buySignals, dir: 'buy' as const }, { signals: sellSignals, dir: 'sell' as const }].map(({ signals: rawSignals, dir }) => {
+                const signals = signalConvictionFilter === 0 ? rawSignals : rawSignals.filter(s => s.reasons.length === signalConvictionFilter);
+                if (signals.length === 0) return null;
+                const isExpanded = signalExpanded[dir];
+                const COLLAPSE_THRESHOLD = 18;
+                const visibleSignals = isExpanded ? signals : signals.slice(0, COLLAPSE_THRESHOLD);
+                const hiddenCount = signals.length - visibleSignals.length;
+                return (
                   <div key={dir} className="flex flex-wrap items-start gap-2">
                     <span className={`flex items-center gap-1 text-xs font-semibold shrink-0 pt-0.5 min-w-[70px] ${dir==='buy'?'text-emerald-400':'text-rose-400'}`}>
                       {dir==='buy'?<TrendingUp size={13}/>:<TrendingDown size={13}/>} {dir==='buy'?'MUA':'BÁN'} ({signals.length})
                     </span>
                     <div className="flex flex-wrap gap-2">
-                      {signals.map(({ ticker, reasons, entry, target }) => {
+                      {visibleSignals.map(({ ticker, reasons, entry, target }) => {
                         const score = reasons.length; const c = dir==='buy'?'emerald':'rose';
                         return (
                           <div key={ticker} onClick={() => handleSignalTickerClick(ticker)}
@@ -435,10 +463,22 @@ export default function Home() {
                           </div>
                         );
                       })}
+                      {hiddenCount > 0 && (
+                        <button onClick={() => setSignalExpanded(p => ({ ...p, [dir]: true }))}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 bg-slate-700/40 border border-slate-600/50 hover:bg-slate-700 hover:text-slate-200 transition-colors">
+                          + {hiddenCount} mã khác <ChevronDown size={12}/>
+                        </button>
+                      )}
+                      {isExpanded && signals.length > COLLAPSE_THRESHOLD && (
+                        <button onClick={() => setSignalExpanded(p => ({ ...p, [dir]: false }))}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 bg-slate-700/40 border border-slate-600/50 hover:bg-slate-700 hover:text-slate-200 transition-colors">
+                          Thu gọn
+                        </button>
+                      )}
                     </div>
                   </div>
-                ) : null
-              )}
+                );
+              })}
             </div>
           )}
 

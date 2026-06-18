@@ -71,6 +71,17 @@ export default function Home() {
       document.removeEventListener('keydown', onEscape);
     };
   }, [moreMenuOpen]);
+
+  // Close ticker detail / AI modal on Escape
+  useEffect(() => {
+    if (!expandedTicker && !ai.aiTicker) return;
+    const onEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setExpandedTicker(null); ai.closeAi(); }
+    };
+    document.addEventListener('keydown', onEscape);
+    return () => document.removeEventListener('keydown', onEscape);
+  }, [expandedTicker, ai]);
+
   const [rowData,      setRowData]      = useState(sd.data);
   const [tableDragIdx, setTableDragIdx] = useState<number | null>(null);
   const [tableDragOverIdx, setTableDragOverIdx] = useState<number | null>(null);
@@ -507,8 +518,6 @@ export default function Home() {
                               <button onClick={()=>wl.removeTicker(item.ticker)} className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-md transition-colors"><Trash2 size={16}/></button>
                             </div></td>
                           </tr>
-                          {isExpanded&&<tr><td colSpan={14} className="p-0"><ChartView ticker={item.ticker}/></td></tr>}
-                          {ai.aiTicker===item.ticker&&<tr><td colSpan={14} className="p-0"><AiPanel ticker={item.ticker} content={ai.aiContent} loading={ai.aiLoading} error={ai.aiError} onClose={ai.closeAi} item={item}/></td></tr>}
                         </Fragment>
                       );
                     })}
@@ -530,6 +539,47 @@ export default function Home() {
         handleModalDragStart={wl.handleModalDragStart} handleModalDragOver={wl.handleModalDragOver}
         handleModalDrop={wl.handleModalDrop} handleModalDragEnd={wl.handleModalDragEnd}
       />
+
+      {/* ── Ticker Detail Modal — chart popup instead of inline expand ── */}
+      {expandedTicker && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          onClick={e => { if (e.target === e.currentTarget) setExpandedTicker(null); }}
+        >
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-y-auto relative">
+            <button
+              onClick={() => setExpandedTicker(null)}
+              className="absolute top-4 right-4 z-10 p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 rounded-lg transition-colors border border-slate-700"
+            >
+              <X size={16} />
+            </button>
+            <ChartView ticker={expandedTicker} />
+          </div>
+        </div>
+      )}
+
+      {/* ── AI Analysis Modal — chart popup instead of inline expand ── */}
+      {ai.aiTicker && (() => {
+        const aiItem = rowData.find(d => d.ticker === ai.aiTicker) ?? sd.data.find(d => d.ticker === ai.aiTicker);
+        if (!aiItem) return null;
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+            onClick={e => { if (e.target === e.currentTarget) ai.closeAi(); }}
+          >
+            <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto relative">
+              <AiPanel
+                ticker={ai.aiTicker}
+                content={ai.aiContent}
+                loading={ai.aiLoading}
+                error={ai.aiError}
+                onClose={ai.closeAi}
+                item={aiItem}
+              />
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -55,18 +55,6 @@ const SOURCE_QUERIES: Array<{
       { q: 'cổ phiếu site:stockbiz.vn',        category: 'stock'  },
     ],
   },
-  {
-    key: 'f247', name: 'F247',
-    queries: [
-      { q: 'chứng khoán site:f247.com',        category: 'market' },
-    ],
-  },
-  {
-    key: 'f319', name: 'F319',
-    queries: [
-      { q: 'chứng khoán site:f319.com',        category: 'stock'  },
-    ],
-  },
 ];
 
 // General market queries (no source filter) for "Tất cả"

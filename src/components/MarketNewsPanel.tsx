@@ -11,8 +11,6 @@ const SOURCES = [
   { key: 'tinnhanhchungkhoan',  label: 'Tin Nhanh CK' },
   { key: 'vneconomy',           label: 'VNEconomy' },
   { key: 'stockbiz',            label: 'StockBiz' },
-  { key: 'f247',                label: 'F247' },
-  { key: 'f319',                label: 'F319' },
 ];
 
 const CATEGORIES = [
@@ -81,8 +79,23 @@ export default function MarketNewsPanel() {
 
   const handleSearch = (e: React.FormEvent) => { e.preventDefault(); setSearch(searchInput); };
 
+  const SOURCE_NAME_MAP: Record<string, string[]> = {
+    cafef:               ['cafef'],
+    vietstock:           ['vietstock'],
+    tinnhanhchungkhoan:  ['tin nhanh', 'tinnhanh'],
+    vneconomy:           ['vneconomy', 'vn economy'],
+    stockbiz:            ['stockbiz'],
+  };
+
+  const matchesSource = (a: NewsArticle, key: string) => {
+    if (key === 'all') return true;
+    if (a.source === key) return true;
+    const name = a.sourceName.toLowerCase();
+    return SOURCE_NAME_MAP[key]?.some(k => name.includes(k)) ?? false;
+  };
+
   const sourceGroups = SOURCES.slice(1).reduce<Record<string, number>>((acc, s) => {
-    acc[s.key] = articles.filter(a => a.source === s.key).length;
+    acc[s.key] = articles.filter(a => matchesSource(a, s.key)).length;
     return acc;
   }, {});
 

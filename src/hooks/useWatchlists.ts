@@ -107,3 +107,5 @@ export function useWatchlists() {
     handleModalDragStart, handleModalDragOver, handleModalDragEnd, handleModalDrop,
   };
 }
+
+export type UseWatchlistsReturn = ReturnType<typeof useWatchlists>;

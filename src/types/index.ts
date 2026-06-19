@@ -60,6 +60,6 @@ export interface StockIndicatorResult {
 export type RsiFilter   = 'ALL' | 'OVERSOLD' | 'OVERBOUGHT' | 'NEUTRAL';
 export type MacdFilter  = 'ALL' | 'BULLISH' | 'BEARISH';
 export type StochFilter = 'ALL' | 'OVERSOLD' | 'OVERBOUGHT' | 'BULLISH_CROSS' | 'BEARISH_CROSS';
-export type ActiveTab   = 'watchlist' | 'history' | 'heatmap' | 'screener';
+// ActiveTab moved to @/components/layout/Header (single source of truth for tab list)
 
 export const MASTER_ID = 'master';

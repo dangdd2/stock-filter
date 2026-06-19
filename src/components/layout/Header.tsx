@@ -3,13 +3,13 @@ import Link from 'next/link';
 import {
   Activity, BarChart2, MessageSquare, PieChart, UserSearch, Columns2,
   SlidersHorizontal, Map as MapIcon, Bell, Waves, Layers, GitFork,
-  LayoutGrid, History, MoreVertical, ChevronDown, HelpCircle,
+  LayoutGrid, History, MoreVertical, ChevronDown, HelpCircle, Newspaper,
 } from 'lucide-react';
 
 export type ActiveTab =
   | 'watchlist' | 'history' | 'heatmap' | 'screener' | 'alerts' | 'multicharts'
   | 'patterns' | 'mtf' | 'correlation' | 'compare' | 'sector' | 'aichat'
-  | 'insider' | 'smartmoney' | 'earnings';
+  | 'insider' | 'smartmoney' | 'earnings' | 'news';
 
 interface Props {
   activeTab: ActiveTab;
@@ -40,7 +40,8 @@ export default function Header({ activeTab, setActiveTab, unreadAlerts, signalHi
 
   const primaryTabs = [
     { id: 'watchlist'   as ActiveTab, label: 'Watchlist',  icon: <BarChart2 size={13}/>,      cls: 'blue'    },
-    { id: 'aichat'      as ActiveTab, label: 'AI Chat',    icon: <MessageSquare size={13}/>,  cls: 'emerald' },
+    { id: 'news'       as ActiveTab, label: 'Tin Tức',   icon: <Newspaper size={13}/>,    cls: 'blue'    },
+    { id: 'aichat'     as ActiveTab, label: 'AI Chat',   icon: <MessageSquare size={13}/>, cls: 'emerald' },
     { id: 'sector'      as ActiveTab, label: 'Ngành',      icon: <PieChart size={13}/>,       cls: 'orange'  },
     { id: 'insider'     as ActiveTab, label: 'Insider',    icon: <UserSearch size={13}/>,     cls: 'rose'    },
     { id: 'earnings'    as ActiveTab, label: 'Earnings',   icon: <BarChart2 size={13}/>,      cls: 'teal'    },

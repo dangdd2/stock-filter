@@ -1,5 +1,9 @@
-import { Activity, RefreshCw, TrendingUp, TrendingDown, EyeOff } from 'lucide-react';
+'use client';
+import { useState } from 'react';
+import { Activity, RefreshCw, TrendingUp, TrendingDown, EyeOff, ChevronDown } from 'lucide-react';
 import type { SignalEntry } from '@/hooks/useTickerSignals';
+
+const COLLAPSE_THRESHOLD = 18;
 
 interface Props {
   buySignals: SignalEntry[];
@@ -13,6 +17,9 @@ interface Props {
 export default function SignalRecommendationPanel({
   buySignals, sellSignals, watchlistName, loading, onTickerClick, onIgnoreTicker,
 }: Props) {
+  const [convictionFilter, setConvictionFilter] = useState<0 | 1 | 2 | 3>(0);
+  const [expanded, setExpanded] = useState<{ buy: boolean; sell: boolean }>({ buy: true, sell: false });
+
   if (buySignals.length === 0 && sellSignals.length === 0) return null;
 
   return (
@@ -23,15 +30,34 @@ export default function SignalRecommendationPanel({
         {loading && <RefreshCw size={11} className="animate-spin text-slate-400 ml-1"/>}
         <span className="text-xs text-slate-500">— {watchlistName}</span>
         <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 border border-slate-600 text-slate-400 tracking-wide">sorted by conviction</span>
+        <div className="ml-auto flex items-center gap-1.5">
+          <span className="text-[10px] text-slate-500 mr-0.5">Conviction:</span>
+          {([0, 3, 2, 1] as const).map(lvl => (
+            <button key={lvl} onClick={() => setConvictionFilter(lvl)}
+              className={`px-2 py-0.5 rounded-md text-[10px] font-semibold transition-colors border ${
+                convictionFilter === lvl
+                  ? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                  : 'text-slate-500 border-transparent hover:bg-slate-700 hover:text-slate-300'
+              }`}>
+              {lvl === 0 ? 'Tất cả' : `${lvl}/3`}
+            </button>
+          ))}
+        </div>
       </div>
-      {[{ signals: buySignals, dir: 'buy' as const }, { signals: sellSignals, dir: 'sell' as const }].map(({ signals, dir }) =>
-        signals.length > 0 ? (
+
+      {([{ signals: buySignals, dir: 'buy' as const }, { signals: sellSignals, dir: 'sell' as const }]).map(({ signals: rawSignals, dir }) => {
+        const signals = convictionFilter === 0 ? rawSignals : rawSignals.filter(s => s.reasons.length === convictionFilter);
+        if (signals.length === 0) return null;
+        const isExpanded = expanded[dir];
+        const visible = isExpanded ? signals : signals.slice(0, COLLAPSE_THRESHOLD);
+        const hidden = signals.length - visible.length;
+        return (
           <div key={dir} className="flex flex-wrap items-start gap-2">
             <span className={`flex items-center gap-1 text-xs font-semibold shrink-0 pt-0.5 min-w-[70px] ${dir==='buy'?'text-emerald-400':'text-rose-400'}`}>
               {dir==='buy'?<TrendingUp size={13}/>:<TrendingDown size={13}/>} {dir==='buy'?'MUA':'BÁN'} ({signals.length})
             </span>
             <div className="flex flex-wrap gap-2">
-              {signals.map(({ ticker, reasons, entry, target }) => {
+              {visible.map(({ ticker, reasons, entry, target }) => {
                 const score = reasons.length; const c = dir==='buy'?'emerald':'rose';
                 return (
                   <div key={ticker} onClick={() => onTickerClick(ticker)}
@@ -55,10 +81,22 @@ export default function SignalRecommendationPanel({
                   </div>
                 );
               })}
+              {hidden > 0 && (
+                <button onClick={() => setExpanded(p => ({ ...p, [dir]: true }))}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 bg-slate-700/40 border border-slate-600/50 hover:bg-slate-700 hover:text-slate-200 transition-colors">
+                  + {hidden} mã khác <ChevronDown size={12}/>
+                </button>
+              )}
+              {isExpanded && signals.length > COLLAPSE_THRESHOLD && (
+                <button onClick={() => setExpanded(p => ({ ...p, [dir]: false }))}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 bg-slate-700/40 border border-slate-600/50 hover:bg-slate-700 hover:text-slate-200 transition-colors">
+                  Thu gọn
+                </button>
+              )}
             </div>
           </div>
-        ) : null
-      )}
+        );
+      })}
     </div>
   );
 }

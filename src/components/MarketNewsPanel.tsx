@@ -4,15 +4,6 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Newspaper, RefreshCw, Search, Bookmark, ExternalLink, Clock, Filter } from 'lucide-react';
 import type { NewsArticle } from '@/app/api/market-news/route';
 
-const SOURCES = [
-  { key: 'all',                label: 'Tất cả' },
-  { key: 'cafef',              label: 'CafeF' },
-  { key: 'vietstock',          label: 'Vietstock' },
-  { key: 'tinnhanhchungkhoan', label: 'Tin Nhanh CK' },
-  { key: 'vneconomy',          label: 'VNEconomy' },
-  { key: 'stockbiz',           label: 'StockBiz' },
-];
-
 const CATEGORIES = [
   { key: 'all',    label: 'Tất cả tin tức' },
   { key: 'market', label: 'Thị trường' },
@@ -32,38 +23,22 @@ const CATEGORY_LABEL: Record<string, string> = {
   market: 'Thị trường', stock: 'Cổ phiếu', macro: 'Vĩ mô', world: 'Thế giới',
 };
 
-const SOURCE_NAME_MAP: Record<string, string[]> = {
-  cafef:               ['cafef'],
-  vietstock:           ['vietstock'],
-  tinnhanhchungkhoan:  ['tin nhanh', 'tinnhanh'],
-  vneconomy:           ['vneconomy', 'vn economy'],
-  stockbiz:            ['stockbiz'],
-};
-
-function matchesSource(a: NewsArticle, key: string): boolean {
-  if (key === 'all') return true;
-  if (a.source === key) return true;
-  const name = a.sourceName.toLowerCase();
-  return SOURCE_NAME_MAP[key]?.some(k => name.includes(k)) ?? false;
-}
-
 export default function MarketNewsPanel() {
   const [allArticles, setAllArticles] = useState<NewsArticle[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState<string | null>(null);
-  const [source,   setSource]   = useState('all');
   const [category, setCategory] = useState('all');
   const [search,   setSearch]   = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [saved,    setSaved]    = useState<Set<string>>(new Set());
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  // source + search → API refetch. Category is client-side only (instant, no refetch).
+  // Only search triggers API refetch. Category is client-side only (instant, no reload).
   const fetchNews = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ source });
+      const params = new URLSearchParams();
       if (search) params.set('q', search);
       const res = await fetch(`/api/market-news?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -75,7 +50,7 @@ export default function MarketNewsPanel() {
     } finally {
       setLoading(false);
     }
-  }, [source, search]);
+  }, [search]);
 
   useEffect(() => { fetchNews(); }, [fetchNews]);
 
@@ -83,19 +58,9 @@ export default function MarketNewsPanel() {
     try { const s = localStorage.getItem('news_saved'); if (s) setSaved(new Set(JSON.parse(s))); } catch { /* ignore */ }
   }, []);
 
-  // Client-side: category filter applied on top of API results
   const articles = useMemo(
     () => category === 'all' ? allArticles : allArticles.filter(a => a.category === category),
     [allArticles, category]
-  );
-
-  // Count per source from full allArticles (not filtered by category, so counts stay stable)
-  const sourceGroups = useMemo(() =>
-    SOURCES.slice(1).reduce<Record<string, number>>((acc, s) => {
-      acc[s.key] = allArticles.filter(a => matchesSource(a, s.key)).length;
-      return acc;
-    }, {}),
-    [allArticles]
   );
 
   const toggleSave = (id: string) => {
@@ -139,33 +104,17 @@ export default function MarketNewsPanel() {
         </button>
       </div>
 
-      {/* Filter bar */}
-      <div className="flex gap-2 flex-wrap items-center">
-        <div className="flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5">
-          <Filter size={11} className="text-slate-500 shrink-0" />
-          {CATEGORIES.map(c => (
-            <button key={c.key} onClick={() => setCategory(c.key)}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
-                category === c.key ? 'bg-blue-500/20 text-blue-300' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-700'
-              }`}>
-              {c.label}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {SOURCES.map(s => {
-            const count = s.key === 'all' ? allArticles.length : (sourceGroups[s.key] ?? 0);
-            return (
-              <button key={s.key} onClick={() => setSource(s.key)}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors border ${
-                  source === s.key ? 'bg-slate-700 text-slate-200 border-slate-600' : 'text-slate-500 border-transparent hover:bg-slate-700/50 hover:text-slate-300'
-                }`}>
-                {s.label}
-                {count > 0 && <span className="text-[9px] text-slate-500 font-normal">{count}</span>}
-              </button>
-            );
-          })}
-        </div>
+      {/* Category filter only */}
+      <div className="flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 w-fit">
+        <Filter size={11} className="text-slate-500 shrink-0" />
+        {CATEGORIES.map(c => (
+          <button key={c.key} onClick={() => setCategory(c.key)}
+            className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+              category === c.key ? 'bg-blue-500/20 text-blue-300' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-700'
+            }`}>
+            {c.label}
+          </button>
+        ))}
       </div>
 
       {error && <div className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">{error}</div>}
@@ -232,7 +181,7 @@ export default function MarketNewsPanel() {
       </div>
 
       {articles.length > 0 && (
-        <p className="text-center text-[11px] text-slate-600">{articles.length} / {allArticles.length} tin tức</p>
+        <p className="text-center text-[11px] text-slate-600">{articles.length} tin tức</p>
       )}
     </div>
   );

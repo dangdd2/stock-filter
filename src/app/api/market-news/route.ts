@@ -164,26 +164,17 @@ async function fetchGoogleNewsRSS(
 
 export async function GET(req: Request): Promise<NextResponse> {
   const { searchParams } = new URL(req.url);
-  const sourceFilter   = searchParams.get('source')   ?? 'all';
   const categoryFilter = searchParams.get('category') ?? 'all';
   const search         = (searchParams.get('q') ?? '').toLowerCase();
 
-  let tasks: Promise<NewsArticle[]>[];
-
-  if (sourceFilter === 'all') {
-    // General queries + all source-specific
-    tasks = [
-      ...GENERAL_QUERIES.map(({ q, category }) => fetchGoogleNewsRSS(q, category, 'all', 'Khác')),
-      ...SOURCE_QUERIES.flatMap(src =>
-        src.queries.map(({ q, category }) => fetchGoogleNewsRSS(q, category, src.key, src.name))
-      ),
-    ];
-  } else {
-    const src = SOURCE_QUERIES.find(s => s.key === sourceFilter);
-    tasks = src
-      ? src.queries.map(({ q, category }) => fetchGoogleNewsRSS(q, category, src.key, src.name))
-      : [];
-  }
+  // Always fetch from all sources in one pass — site filtering by Google's `site:` operator
+  // proved unreliable/inconsistent, so we just aggregate everything and let category/search filter client-side.
+  const tasks: Promise<NewsArticle[]>[] = [
+    ...GENERAL_QUERIES.map(({ q, category }) => fetchGoogleNewsRSS(q, category, 'all', 'Khác')),
+    ...SOURCE_QUERIES.flatMap(src =>
+      src.queries.map(({ q, category }) => fetchGoogleNewsRSS(q, category, src.key, src.name))
+    ),
+  ];
 
   const results = await Promise.allSettled(tasks);
   const all: NewsArticle[] = [];

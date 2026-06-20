@@ -15,55 +15,47 @@ export interface NewsArticle {
   ticker?: string;
 }
 
-// Google News RSS queries per source — proven to work (used by InsiderTracker)
-const SOURCE_QUERIES: Array<{
+// Direct RSS feeds — fetched straight from each publisher (no Google News proxy delay).
+// Each publisher updates these feeds in near-realtime (TTL 5-15 min), much faster than
+// waiting for Google News to crawl/index the article.
+const RSS_FEEDS: Array<{
   key: string;
   name: string;
-  queries: Array<{ q: string; category: NewsArticle['category'] }>;
+  feeds: Array<{ url: string; category: NewsArticle['category'] }>;
 }> = [
   {
     key: 'cafef', name: 'CafeF',
-    queries: [
-      { q: 'chứng khoán site:cafef.vn',       category: 'stock'  },
-      { q: 'thị trường site:cafef.vn',         category: 'market' },
+    feeds: [
+      { url: 'https://cafef.vn/thi-truong-chung-khoan.rss', category: 'stock'  },
+      { url: 'https://cafef.vn/tai-chinh-ngan-hang.rss',     category: 'market' },
+      { url: 'https://cafef.vn/vi-mo-dau-tu.rss',            category: 'macro'  },
     ],
   },
   {
     key: 'vietstock', name: 'Vietstock',
-    queries: [
-      { q: 'cổ phiếu site:vietstock.vn',       category: 'stock'  },
-      { q: 'thị trường site:vietstock.vn',      category: 'market' },
+    feeds: [
+      { url: 'https://vietstock.vn/830/chung-khoan/co-phieu.rss/', category: 'stock'  },
     ],
   },
   {
     key: 'tinnhanhchungkhoan', name: 'Tin Nhanh CK',
-    queries: [
-      { q: 'site:tinnhanhchungkhoan.vn chứng khoán', category: 'stock'  },
-      { q: 'site:tinnhanhchungkhoan.vn thị trường',  category: 'market' },
+    feeds: [
+      { url: 'https://www.tinnhanhchungkhoan.vn/chung-khoan.rss', category: 'stock'  },
+      { url: 'https://www.tinnhanhchungkhoan.vn/thi-truong.rss',  category: 'market' },
     ],
   },
   {
     key: 'vneconomy', name: 'VNEconomy',
-    queries: [
-      { q: 'chứng khoán site:vneconomy.vn',    category: 'stock'  },
-      { q: 'kinh tế site:vneconomy.vn',        category: 'macro'  },
+    feeds: [
+      { url: 'https://vneconomy.vn/chung-khoan.rss', category: 'stock' },
     ],
   },
   {
-    key: 'stockbiz', name: 'StockBiz',
-    queries: [
-      { q: 'cổ phiếu site:stockbiz.vn',        category: 'stock'  },
+    key: 'vnbusiness', name: 'VnBusiness',
+    feeds: [
+      { url: 'https://vnbusiness.vn/rss/chung-khoan.rss', category: 'stock'  },
     ],
   },
-];
-
-// General market queries (no source filter) for "Tất cả"
-const GENERAL_QUERIES: Array<{ q: string; category: NewsArticle['category'] }> = [
-  { q: 'thị trường chứng khoán Việt Nam hôm nay', category: 'market' },
-  { q: 'VNINDEX HNX hôm nay',                     category: 'market' },
-  { q: 'cổ phiếu khuyến nghị mua bán',            category: 'stock'  },
-  { q: 'lãi suất ngân hàng nhà nước Việt Nam',    category: 'macro'  },
-  { q: 'kinh tế vĩ mô Việt Nam',                  category: 'macro'  },
 ];
 
 function relativeTime(dateStr: string): string {
@@ -79,7 +71,7 @@ function relativeTime(dateStr: string): string {
   } catch { return ''; }
 }
 
-const IGNORE_TICKERS = new Set(['RSS','USD','VND','IPO','ETF','GDP','CPI','PPI','FED','IMF','WTO','SEC','PE','EPS','NAV','ROE','ROA','VN','DN','CP','CT','TT','HN','TP','PT','TP.HCM']);
+const IGNORE_TICKERS = new Set(['RSS','USD','VND','IPO','ETF','GDP','CPI','PPI','FED','IMF','WTO','SEC','PE','EPS','NAV','ROE','ROA','VN','DN','CP','CT','TT','HN','TP','PT','TP.HCM','HOSE','HNX']);
 
 function extractTicker(title: string): string | undefined {
   const m = title.match(/\b([A-Z]{2,4})\b/g);
@@ -87,7 +79,7 @@ function extractTicker(title: string): string | undefined {
 }
 
 function decodeEntities(s: string): string {
-  return s.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&nbsp;/g,' ');
+  return s.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&nbsp;/g,' ').replace(/<[^>]+>/g, '');
 }
 
 function extractTag(xml: string, tag: string): string {
@@ -95,21 +87,21 @@ function extractTag(xml: string, tag: string): string {
   return (m?.[1] || m?.[2] || '').trim();
 }
 
-async function fetchGoogleNewsRSS(
-  query: string,
+async function fetchRSSFeed(
+  url: string,
   category: NewsArticle['category'],
   sourceKey: string,
   sourceName: string,
 ): Promise<NewsArticle[]> {
-  const encoded = encodeURIComponent(query);
-  const url = `https://news.google.com/rss/search?q=${encoded}&hl=vi&gl=VN&ceid=VN:vi`;
   try {
     const res = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         'Accept': 'application/rss+xml,application/xml,text/xml,*/*',
+        'Accept-Language': 'vi-VN,vi;q=0.9',
       },
       signal: AbortSignal.timeout(8000),
+      next: { revalidate: 0 },
     });
     if (!res.ok) return [];
     const text = await res.text();
@@ -118,44 +110,25 @@ async function fetchGoogleNewsRSS(
     const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/gi;
     let m: RegExpExecArray | null;
 
-    while ((m = itemRegex.exec(text)) !== null && items.length < 15) {
+    while ((m = itemRegex.exec(text)) !== null && items.length < 30) {
       const block = m[1];
       const title   = decodeEntities(extractTag(block, 'title'));
       const link    = extractTag(block, 'link') || extractTag(block, 'guid');
-      const pubDate = extractTag(block, 'pubDate');
+      const pubDate = extractTag(block, 'pubDate') || extractTag(block, 'dc:date');
 
       if (!title || !link) continue;
 
-      // Detect actual source from Google News redirect URL or title suffix " - SourceName"
-      let resolvedSource = sourceKey;
-      let resolvedName   = sourceName;
-      if (sourceKey === 'all') {
-        const titleParts = title.split(' - ');
-        const suf = titleParts[titleParts.length - 1]?.trim().toLowerCase() ?? '';
-        if (suf.includes('cafef'))             { resolvedSource = 'cafef';               resolvedName = 'CafeF'; }
-        else if (suf.includes('vietstock'))    { resolvedSource = 'vietstock';           resolvedName = 'Vietstock'; }
-        else if (suf.includes('tinnhanh'))     { resolvedSource = 'tinnhanhchungkhoan';  resolvedName = 'Tin Nhanh CK'; }
-        else if (suf.includes('vneconomy'))    { resolvedSource = 'vneconomy';           resolvedName = 'VNEconomy'; }
-        else if (suf.includes('stockbiz'))     { resolvedSource = 'stockbiz';            resolvedName = 'StockBiz'; }
-        else if (suf.includes('f247'))         { resolvedSource = 'f247';                resolvedName = 'F247'; }
-        else if (suf.includes('f319'))         { resolvedSource = 'f319';                resolvedName = 'F319'; }
-        else                                   { resolvedSource = 'other';               resolvedName = titleParts[titleParts.length - 1]?.trim() ?? 'Khác'; }
-      }
-
-      // Clean title — remove " - SourceName" suffix that Google appends
-      const cleanTitle = title.replace(/ - [^-]+$/, '').trim();
-
       const published = pubDate ? new Date(pubDate).toISOString() : new Date().toISOString();
       items.push({
-        id: `${resolvedSource}_${Buffer.from(link).toString('base64url')}`,
-        title: cleanTitle,
+        id: `${sourceKey}_${Buffer.from(link).toString('base64url')}`,
+        title: title.trim(),
         url: link.trim(),
-        source: resolvedSource,
-        sourceName: resolvedName,
+        source: sourceKey,
+        sourceName,
         publishedAt: published,
         relativeTime: relativeTime(published),
         category,
-        ticker: extractTicker(cleanTitle),
+        ticker: extractTicker(title),
       });
     }
     return items;
@@ -167,14 +140,9 @@ export async function GET(req: Request): Promise<NextResponse> {
   const categoryFilter = searchParams.get('category') ?? 'all';
   const search         = (searchParams.get('q') ?? '').toLowerCase();
 
-  // Always fetch from all sources in one pass — site filtering by Google's `site:` operator
-  // proved unreliable/inconsistent, so we just aggregate everything and let category/search filter client-side.
-  const tasks: Promise<NewsArticle[]>[] = [
-    ...GENERAL_QUERIES.map(({ q, category }) => fetchGoogleNewsRSS(q, category, 'all', 'Khác')),
-    ...SOURCE_QUERIES.flatMap(src =>
-      src.queries.map(({ q, category }) => fetchGoogleNewsRSS(q, category, src.key, src.name))
-    ),
-  ];
+  const tasks: Promise<NewsArticle[]>[] = RSS_FEEDS.flatMap(src =>
+    src.feeds.map(({ url, category }) => fetchRSSFeed(url, category, src.key, src.name))
+  );
 
   const results = await Promise.allSettled(tasks);
   const all: NewsArticle[] = [];
@@ -182,7 +150,7 @@ export async function GET(req: Request): Promise<NextResponse> {
     if (r.status === 'fulfilled') all.push(...r.value);
   }
 
-  // Deduplicate by title prefix (catches same story from different queries)
+  // Deduplicate by title prefix
   const seenTitles = new Set<string>();
   const dedupedByTitle = all.filter(a => {
     const k = a.title.slice(0, 50).toLowerCase();
@@ -191,7 +159,7 @@ export async function GET(req: Request): Promise<NextResponse> {
     return true;
   });
 
-  // Safety dedupe by id — guarantees no duplicate React keys reach the client
+  // Safety dedupe by id
   const seenIds = new Set<string>();
   const deduped = dedupedByTitle.filter(a => {
     if (seenIds.has(a.id)) return false;

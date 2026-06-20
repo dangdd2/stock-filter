@@ -147,7 +147,7 @@ async function fetchGoogleNewsRSS(
 
       const published = pubDate ? new Date(pubDate).toISOString() : new Date().toISOString();
       items.push({
-        id: `${resolvedSource}_${Buffer.from(link).toString('base64').slice(0, 16)}`,
+        id: `${resolvedSource}_${Buffer.from(link).toString('base64url')}`,
         title: cleanTitle,
         url: link.trim(),
         source: resolvedSource,
@@ -182,12 +182,20 @@ export async function GET(req: Request): Promise<NextResponse> {
     if (r.status === 'fulfilled') all.push(...r.value);
   }
 
-  // Deduplicate by title prefix
-  const seen = new Set<string>();
-  const deduped = all.filter(a => {
+  // Deduplicate by title prefix (catches same story from different queries)
+  const seenTitles = new Set<string>();
+  const dedupedByTitle = all.filter(a => {
     const k = a.title.slice(0, 50).toLowerCase();
-    if (seen.has(k)) return false;
-    seen.add(k);
+    if (seenTitles.has(k)) return false;
+    seenTitles.add(k);
+    return true;
+  });
+
+  // Safety dedupe by id — guarantees no duplicate React keys reach the client
+  const seenIds = new Set<string>();
+  const deduped = dedupedByTitle.filter(a => {
+    if (seenIds.has(a.id)) return false;
+    seenIds.add(a.id);
     return true;
   });
 

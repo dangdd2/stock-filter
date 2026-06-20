@@ -3,13 +3,13 @@ import Link from 'next/link';
 import {
   Activity, BarChart2, MessageSquare, PieChart, UserSearch, Columns2,
   SlidersHorizontal, Map as MapIcon, Bell, Waves, Layers, GitFork,
-  LayoutGrid, History, MoreVertical, ChevronDown, HelpCircle, Newspaper,
+  LayoutGrid, History, MoreVertical, ChevronDown, HelpCircle, Newspaper, Radar,
 } from 'lucide-react';
 
 export type ActiveTab =
   | 'watchlist' | 'history' | 'heatmap' | 'screener' | 'alerts' | 'multicharts'
   | 'patterns' | 'mtf' | 'correlation' | 'compare' | 'sector' | 'aichat'
-  | 'insider' | 'smartmoney' | 'earnings' | 'news';
+  | 'insider' | 'smartmoney' | 'earnings' | 'news' | 'sentiment';
 
 interface Props {
   activeTab: ActiveTab;
@@ -52,6 +52,7 @@ export default function Header({ activeTab, setActiveTab, unreadAlerts, signalHi
   ];
 
   const moreTabs = [
+    { id: 'sentiment'  as ActiveTab, label: 'Cảm Biến TT', icon: <Radar size={13}/>,            cls: 'amber'   },
     { id: 'smartmoney'  as ActiveTab, label: 'Smart Money', icon: <Waves size={13}/>,            cls: 'cyan'    },
     { id: 'mtf'         as ActiveTab, label: 'MTF',          icon: <Layers size={13}/>,            cls: 'indigo'  },
     { id: 'correlation' as ActiveTab, label: 'Correlation',  icon: <GitFork size={13}/>,           cls: 'teal'    },

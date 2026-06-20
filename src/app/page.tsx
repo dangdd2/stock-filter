@@ -30,6 +30,7 @@ import SectorAnalysis            from '@/components/SectorAnalysis';
 import AiChatPanel               from '@/components/AiChatPanel';
 import InsiderTracker            from '@/components/InsiderTracker';
 import SmartMoneyFlow           from '@/components/SmartMoneyFlow';
+import MarketSentimentPanel       from '@/components/MarketSentimentPanel';
 import MarketNewsPanel           from '@/components/MarketNewsPanel';
 import EarningsCalendar         from '@/components/EarningsCalendar';
 import { BarChart2, X } from 'lucide-react';
@@ -127,6 +128,7 @@ export default function Home() {
       <main className="w-full px-4 py-4 space-y-3">
         <MarketStatusBar loading={sd.loading} lastUpdated={sd.lastUpdated} onRefresh={sd.fetchData}/>
 
+        {activeTab === 'sentiment' && <MarketSentimentPanel data={allData} />}
         {activeTab === 'news' && <MarketNewsPanel />}
         {activeTab === 'patterns' && <PatternRecognitionPanel data={allData} onTickerClick={onWatchlistTickerClick} />}
         {activeTab === 'mtf' && <MultiTimeframePanel tickers={wl.activeWatchlist?.tickers ?? []} onTickerClick={onWatchlistTickerClick} />}

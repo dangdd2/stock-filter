@@ -290,56 +290,61 @@ export default function ChartView({ ticker }: { ticker: string }) {
   }, [showVolPanel, showRsiPanel, showMacdPanel, showStochPanel, showMfiPanel, showObvPanel]);
 
   // ─── Push data into series whenever chartData or toggles change ─────────
+  const [chartRenderError, setChartRenderError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!chartData.length) return;
+    try {
+      setChartRenderError(null);
 
-    candleSeriesRef.current?.setData(chartData.map(d => ({
-      time: d.time as Time, open: d.open, high: d.high, low: d.low, close: d.close,
-    })));
+      // lightweight-charts requires data sorted ascending by time with no duplicate timestamps.
+      const sorted = [...chartData].sort((a, b) => a.time - b.time);
+      const deduped = sorted.filter((d, i) => i === 0 || d.time !== sorted[i - 1].time);
 
-    if (showMA20 && ma20SeriesRef.current) {
-      ma20SeriesRef.current.setData(chartData.filter(d => d.ma20 != null).map(d => ({ time: d.time as Time, value: d.ma20! })));
-    } else { ma20SeriesRef.current?.setData([]); }
+      candleSeriesRef.current?.setData(deduped.map(d => ({
+        time: d.time as Time, open: d.open, high: d.high, low: d.low, close: d.close,
+      })));
 
-    if (showMA50 && ma50SeriesRef.current) {
-      ma50SeriesRef.current.setData(chartData.filter(d => d.ma50 != null).map(d => ({ time: d.time as Time, value: d.ma50! })));
-    } else { ma50SeriesRef.current?.setData([]); }
+      if (showMA20 && ma20SeriesRef.current) {
+        ma20SeriesRef.current.setData(deduped.filter(d => d.ma20 != null).map(d => ({ time: d.time as Time, value: d.ma20! })));
+      } else { ma20SeriesRef.current?.setData([]); }
 
-    if (showBB) {
-      bbUpperRef.current?.setData(chartData.filter(d => d.bbUpper != null).map(d => ({ time: d.time as Time, value: d.bbUpper! })));
-      bbMiddleRef.current?.setData(chartData.filter(d => d.bbMiddle != null).map(d => ({ time: d.time as Time, value: d.bbMiddle! })));
-      bbLowerRef.current?.setData(chartData.filter(d => d.bbLower != null).map(d => ({ time: d.time as Time, value: d.bbLower! })));
-    } else {
-      bbUpperRef.current?.setData([]); bbMiddleRef.current?.setData([]); bbLowerRef.current?.setData([]);
+      if (showMA50 && ma50SeriesRef.current) {
+        ma50SeriesRef.current.setData(deduped.filter(d => d.ma50 != null).map(d => ({ time: d.time as Time, value: d.ma50! })));
+      } else { ma50SeriesRef.current?.setData([]); }
+
+      if (showBB) {
+        bbUpperRef.current?.setData(deduped.filter(d => d.bbUpper != null).map(d => ({ time: d.time as Time, value: d.bbUpper! })));
+        bbMiddleRef.current?.setData(deduped.filter(d => d.bbMiddle != null).map(d => ({ time: d.time as Time, value: d.bbMiddle! })));
+        bbLowerRef.current?.setData(deduped.filter(d => d.bbLower != null).map(d => ({ time: d.time as Time, value: d.bbLower! })));
+      } else {
+        bbUpperRef.current?.setData([]); bbMiddleRef.current?.setData([]); bbLowerRef.current?.setData([]);
+      }
+
+      volSeriesRef.current?.setData(deduped.map(d => ({
+        time: d.time as Time, value: d.volume ?? 0, color: d.close >= d.open ? `${UP_COLOR}55` : `${DOWN_COLOR}55`,
+      })));
+      volMaSeriesRef.current?.setData(deduped.filter(d => d.volumeMa != null).map(d => ({ time: d.time as Time, value: d.volumeMa! })));
+
+      rsiSeriesRef.current?.setData(deduped.filter(d => d.rsi != null).map(d => ({ time: d.time as Time, value: d.rsi! })));
+
+      macdHistRef.current?.setData(deduped.map(d => ({
+        time: d.time as Time, value: d.macdHistogram ?? 0, color: (d.macdHistogram ?? 0) >= 0 ? `${UP_COLOR}88` : `${DOWN_COLOR}88`,
+      })));
+      macdLineRef.current?.setData(deduped.filter(d => d.macd != null).map(d => ({ time: d.time as Time, value: d.macd! })));
+      macdSignalRef.current?.setData(deduped.filter(d => d.macdSignal != null).map(d => ({ time: d.time as Time, value: d.macdSignal! })));
+
+      stochKRef.current?.setData(deduped.filter(d => d.stochK != null).map(d => ({ time: d.time as Time, value: d.stochK! })));
+      stochDRef.current?.setData(deduped.filter(d => d.stochD != null).map(d => ({ time: d.time as Time, value: d.stochD! })));
+
+      mfiSeriesRef.current?.setData(deduped.filter(d => d.mfi != null).map(d => ({ time: d.time as Time, value: d.mfi! })));
+      obvSeriesRef.current?.setData(deduped.filter(d => d.obv != null).map(d => ({ time: d.time as Time, value: d.obv! })));
+
+      mainChartRef.current?.timeScale().fitContent();
+    } catch (e) {
+      setChartRenderError(e instanceof Error ? e.message : 'Lỗi không xác định khi vẽ biểu đồ');
     }
-
-    volSeriesRef.current?.setData(chartData.map(d => ({
-      time: d.time as Time, value: d.volume ?? 0, color: d.close >= d.open ? `${UP_COLOR}55` : `${DOWN_COLOR}55`,
-    })));
-    volMaSeriesRef.current?.setData(chartData.filter(d => d.volumeMa != null).map(d => ({ time: d.time as Time, value: d.volumeMa! })));
-
-    rsiSeriesRef.current?.setData(chartData.filter(d => d.rsi != null).map(d => ({ time: d.time as Time, value: d.rsi! })));
-
-    macdHistRef.current?.setData(chartData.map(d => ({
-      time: d.time as Time, value: d.macdHistogram ?? 0, color: (d.macdHistogram ?? 0) >= 0 ? `${UP_COLOR}88` : `${DOWN_COLOR}88`,
-    })));
-    macdLineRef.current?.setData(chartData.filter(d => d.macd != null).map(d => ({ time: d.time as Time, value: d.macd! })));
-    macdSignalRef.current?.setData(chartData.filter(d => d.macdSignal != null).map(d => ({ time: d.time as Time, value: d.macdSignal! })));
-
-    stochKRef.current?.setData(chartData.filter(d => d.stochK != null).map(d => ({ time: d.time as Time, value: d.stochK! })));
-    stochDRef.current?.setData(chartData.filter(d => d.stochD != null).map(d => ({ time: d.time as Time, value: d.stochD! })));
-
-    mfiSeriesRef.current?.setData(chartData.filter(d => d.mfi != null).map(d => ({ time: d.time as Time, value: d.mfi! })));
-    obvSeriesRef.current?.setData(chartData.filter(d => d.obv != null).map(d => ({ time: d.time as Time, value: d.obv! })));
-
-    mainChartRef.current?.timeScale().fitContent();
   }, [chartData, showMA20, showMA50, showBB]);
-
-  const overlayToggles = [
-    { label: 'MA20', color: '#60a5fa', active: showMA20, set: setShowMA20 },
-    { label: 'MA50', color: '#f59e0b', active: showMA50, set: setShowMA50 },
-    { label: 'BB',   color: '#a78bfa', active: showBB,   set: setShowBB   },
-  ] as const;
 
   const panelToggles = [
     { label: 'Vol',   color: '#64748b', active: showVolPanel,   set: setShowVolPanel   },
@@ -363,7 +368,7 @@ export default function ChartView({ ticker }: { ticker: string }) {
 
   return (
     <div className="p-4">
-      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h3 className="text-lg font-bold flex items-center gap-2">
           <BarChart2 className="text-blue-400" /> {ticker} — 6 Months
           {hover && (
@@ -375,29 +380,23 @@ export default function ChartView({ ticker }: { ticker: string }) {
             </span>
           )}
         </h3>
-        <div className="flex items-center gap-2">
-          {overlayToggles.map(({ label, color, active, set }) => (
+        <div className="flex items-center gap-1.5">
+          {panelToggles.map(({ label, color, active, set }) => (
             <button key={label} onClick={() => set(v => !v)}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${active ? 'border-transparent' : 'border-slate-600 opacity-40'}`}
               style={active ? { backgroundColor: color + '22', color, borderColor: color + '55' } : {}}>
-              <span className="inline-block w-3 h-0.5 rounded" style={{ backgroundColor: active ? color : '#475569' }} />
+              <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: active ? color : '#475569' }} />
               {label}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <span className="text-[11px] text-slate-500 mr-1">Panels:</span>
-        {panelToggles.map(({ label, color, active, set }) => (
-          <button key={label} onClick={() => set(v => !v)}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${active ? 'border-transparent' : 'border-slate-600 opacity-40'}`}
-            style={active ? { backgroundColor: color + '22', color, borderColor: color + '55' } : {}}>
-            <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: active ? color : '#475569' }} />
-            {label}
-          </button>
-        ))}
-      </div>
+      {chartRenderError && (
+        <div className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2 mb-3">
+          Lỗi vẽ biểu đồ: {chartRenderError}
+        </div>
+      )}
 
       <div ref={mainContainerRef} className="w-full rounded-lg overflow-hidden border border-slate-800" style={{ height: PANEL_HEIGHT_MAIN }} />
 

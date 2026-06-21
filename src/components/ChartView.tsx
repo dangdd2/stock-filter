@@ -132,6 +132,24 @@ export default function ChartView({ ticker }: { ticker: string }) {
 
   const allCharts = useRef<IChartApi[]>([]);
 
+  // Force-resize a chart to match its container's actual rendered size.
+  // autoSize alone can fail to pick up the correct size when the container
+  // mounts inside a modal/tab that has zero size on the first paint frame
+  // (e.g. CSS transition, conditional render). ResizeObserver + a manual
+  // resize() call right after creation makes this reliable.
+  const attachResizeObserver = useCallback((container: HTMLDivElement, chart: IChartApi, height: number) => {
+    const resize = () => {
+      const w = container.clientWidth;
+      if (w > 0) chart.resize(w, height);
+    };
+    resize();
+    // Run again on next frame in case layout wasn't finalized yet (modal animations etc.)
+    requestAnimationFrame(resize);
+    const ro = new ResizeObserver(resize);
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, []);
+
   const baseChartOptions = useCallback((height: number) => ({
     layout: {
       background: { type: ColorType.Solid, color: CHART_BG },
@@ -146,15 +164,16 @@ export default function ChartView({ ticker }: { ticker: string }) {
     timeScale: { borderColor: BORDER_COLOR, timeVisible: false },
     crosshair: { mode: CrosshairMode.Normal },
     height,
-    autoSize: true,
   }), []);
 
   // ─── Build main candlestick chart (once) ─────────────────────────────────
   useEffect(() => {
     if (!mainContainerRef.current) return;
-    const chart = createChart(mainContainerRef.current, baseChartOptions(PANEL_HEIGHT_MAIN));
+    const container = mainContainerRef.current;
+    const chart = createChart(container, baseChartOptions(PANEL_HEIGHT_MAIN));
     mainChartRef.current = chart;
     allCharts.current.push(chart);
+    const detachResize = attachResizeObserver(container, chart, PANEL_HEIGHT_MAIN);
 
     const candle = chart.addSeries(CandlestickSeries, {
       upColor: UP_COLOR, downColor: DOWN_COLOR,
@@ -173,7 +192,7 @@ export default function ChartView({ ticker }: { ticker: string }) {
       setHoverTime(param.time ? (param.time as number) : null);
     });
 
-    return () => { chart.remove(); allCharts.current = allCharts.current.filter(c => c !== chart); };
+    return () => { detachResize(); chart.remove(); allCharts.current = allCharts.current.filter(c => c !== chart); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -194,11 +213,13 @@ export default function ChartView({ ticker }: { ticker: string }) {
       return;
     }
     if (chartRef.current) return;
-    const chart = createChart(containerRef.current, baseChartOptions(PANEL_HEIGHT_SUB));
+    const container = containerRef.current;
+    const chart = createChart(container, baseChartOptions(PANEL_HEIGHT_SUB));
     chartRef.current = chart;
     allCharts.current.push(chart);
+    attachResizeObserver(container, chart, PANEL_HEIGHT_SUB);
     build(chart);
-  }, [baseChartOptions]);
+  }, [baseChartOptions, attachResizeObserver]);
 
   useEffect(() => {
     buildSubChart(volContainerRef, volChartRef, showVolPanel, chart => {

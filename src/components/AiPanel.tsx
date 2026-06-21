@@ -104,45 +104,31 @@ export default function AiPanel({
 
   return (
     <div className="bg-slate-900 border-t border-violet-500/20 p-6">
-      {/* Header */}
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <Brain size={20} className="text-violet-400" />
-          <h3 className="font-bold text-slate-200">AI Analysis — {ticker}</h3>
-          {rec && (
-            <span className={`px-3 py-1 rounded-full text-xs font-bold border ${rec.className}`}>
-              {rec.label}
-            </span>
-          )}
-          {loading && !rec && (
-            <span className="text-xs text-slate-500 animate-pulse">Analyzing…</span>
-          )}
+      {/* Tab bar */}
+      <div className="flex items-center gap-2 mb-5">
+        <div className="flex gap-1 bg-slate-800/60 rounded-lg p-1 border border-slate-700/40 flex-1">
+          {([
+            { id: 'chart' as AiTab, label: 'Biểu Đồ', icon: <BarChart2 size={13} /> },
+            { id: 'analysis' as AiTab, label: 'Phân Tích AI', icon: <Brain size={13} /> },
+            { id: 'entryexit' as AiTab, label: 'Vào / Ra', icon: <Target size={13} /> },
+            { id: 'news' as AiTab, label: 'Tin Tức', icon: <Newspaper size={13} /> },
+          ] as { id: AiTab; label: string; icon: React.ReactNode }[]).map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setAiTab(tab.id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex-1 justify-center ${
+                aiTab === tab.id
+                  ? 'bg-violet-500/20 text-violet-300 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              {tab.icon} {tab.label}
+            </button>
+          ))}
         </div>
-        <button onClick={onClose} className="p-1 text-slate-500 hover:text-slate-300 transition-colors">
+        <button onClick={onClose} className="p-1.5 text-slate-500 hover:text-slate-300 transition-colors shrink-0">
           <X size={18} />
         </button>
-      </div>
-
-      {/* Tab bar */}
-      <div className="flex gap-1 mb-5 bg-slate-800/60 rounded-lg p-1 border border-slate-700/40">
-        {([
-          { id: 'chart' as AiTab, label: 'Biểu Đồ', icon: <BarChart2 size={13} /> },
-          { id: 'analysis' as AiTab, label: 'Phân Tích AI', icon: <Brain size={13} /> },
-          { id: 'entryexit' as AiTab, label: 'Vào / Ra', icon: <Target size={13} /> },
-          { id: 'news' as AiTab, label: 'Tin Tức', icon: <Newspaper size={13} /> },
-        ] as { id: AiTab; label: string; icon: React.ReactNode }[]).map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setAiTab(tab.id)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex-1 justify-center ${
-              aiTab === tab.id
-                ? 'bg-violet-500/20 text-violet-300 shadow-sm'
-                : 'text-slate-400 hover:text-slate-300'
-            }`}
-          >
-            {tab.icon} {tab.label}
-          </button>
-        ))}
       </div>
 
       {/* Chart tab */}
@@ -162,6 +148,21 @@ export default function AiPanel({
 
       {/* Analysis tab content */}
       {aiTab === 'analysis' && (<>
+      {/* Analysis header */}
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <Brain size={20} className="text-violet-400" />
+          <h3 className="font-bold text-slate-200">AI Analysis — {ticker}</h3>
+          {rec && (
+            <span className={`px-3 py-1 rounded-full text-xs font-bold border ${rec.className}`}>
+              {rec.label}
+            </span>
+          )}
+          {loading && !rec && (
+            <span className="text-xs text-slate-500 animate-pulse">Analyzing…</span>
+          )}
+        </div>
+      </div>
       {error && (
         <div className="text-rose-400 text-sm bg-rose-500/10 border border-rose-500/20 rounded-lg p-3 mb-6">
           {error}

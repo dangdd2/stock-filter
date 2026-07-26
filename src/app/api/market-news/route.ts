@@ -45,6 +45,20 @@ const RSS_FEEDS: Array<{
     ],
   },
   {
+    key: 'baodautu', name: 'Báo Đầu Tư',
+    feeds: [
+      { url: 'https://baodautu.vn/rss/chung-khoan.rss',   category: 'stock'  },
+      { url: 'https://baodautu.vn/rss/tin-moi-nhat.rss',  category: 'market' },
+    ],
+  },
+  {
+    key: 'stockbiz', name: 'StockBiz',
+    feeds: [
+      { url: 'https://stockbiz.vn/rss/news.rss',   category: 'stock' },
+      { url: 'https://stockbiz.vn/rss/market.rss', category: 'market' },
+    ],
+  },
+  {
     key: 'vneconomy', name: 'VNEconomy',
     feeds: [
       { url: 'https://vneconomy.vn/chung-khoan.rss', category: 'stock' },
